@@ -1,0 +1,19 @@
+{
+  "socket_path": "./var/run/watchdog/supervisor.sock",
+  "audit_dir": "./var/lib/watchdog/supervisor/requests",
+  "latest_path": "./var/lib/watchdog/supervisor/latest.json",
+  "state_path": "./var/lib/watchdog/supervisor/current_state.json",
+  "hook_timeout": "5s",
+  "cooldowns": {
+    "notify": "30s",
+    "degrade": "15s",
+    "safe_stop": "5s",
+    "resolve": "5s"
+  },
+  "hooks": {
+    "notify": [],
+    "degrade": [],
+    "safe_stop": [],
+    "resolve": []
+  }
+}

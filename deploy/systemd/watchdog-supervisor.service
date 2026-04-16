@@ -1,0 +1,19 @@
+[Unit]
+Description=Robot Watchdog Supervisor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/lib/watchdog
+RuntimeDirectory=watchdog
+RuntimeDirectoryMode=0755
+StateDirectory=watchdog
+ExecStart=/usr/local/bin/watchdog-supervisor -config /etc/watchdog/watchdog-supervisor.json
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,98 @@
+{
+  "poll_interval": "2s",
+  "incident_dir": "./var/incidents",
+  "log_transitions_only": true,
+  "actions": {
+    "unix_socket": {
+      "enabled": false,
+      "socket_path": "./var/run/watchdog/supervisor.sock",
+      "send_resolved": true,
+      "spool_dir": "./var/spool/watchdog/actions",
+      "replay_batch_size": 64
+    }
+  },
+  "sources": {
+    "host": {
+      "enabled": true
+    },
+    "module_reports": {
+      "enabled": true,
+      "socket_path": "./var/run/watchdog/module.sock",
+      "max_message_bytes": 4096,
+      "default_stale_after": "5s"
+    },
+    "systemd": {
+      "enabled": false,
+      "units": [
+        {
+          "name": "planner.service",
+          "source_id": "planner",
+          "require_main_pid": true
+        }
+      ]
+    },
+    "can": {
+      "enabled": false,
+      "backend": "socketcan",
+      "interfaces": [
+        {
+          "name": "can0",
+          "source_id": "drive-can",
+          "expected_bitrate": 1000000,
+          "require_up": true,
+          "expected_nodes": [
+            {
+              "name": "left_drive",
+              "id": 1
+            },
+            {
+              "name": "right_drive",
+              "id": 2
+            }
+          ]
+        }
+      ]
+    },
+    "ethercat": {
+      "enabled": false,
+      "backend": "igh",
+      "masters": [
+        {
+          "name": "master0",
+          "source_id": "actuators",
+          "expected_state": "op",
+          "expected_slaves": 12,
+          "require_link": true
+        }
+      ]
+    }
+  },
+  "rules": {
+    "host": {
+      "max_cpu_temp_warn_c": 85,
+      "max_cpu_temp_critical_c": 95,
+      "max_temp_warn_c": 90,
+      "max_temp_critical_c": 100,
+      "mem_available_warn_mb": 1024,
+      "mem_available_critical_mb": 512,
+      "load_ratio_warn": 1.0,
+      "load_ratio_critical": 1.5
+    },
+    "process": {
+      "restart_warn": 1,
+      "restart_fail": 3
+    },
+    "can": {
+      "missing_nodes_warn": 1,
+      "missing_nodes_fail": 2,
+      "restart_warn": 1,
+      "restart_fail": 3
+    },
+    "ethercat": {
+      "missing_slaves_warn": 1,
+      "missing_slaves_fail": 2,
+      "wkc_warn_ratio": 0.95,
+      "wkc_fail_ratio": 0.8
+    }
+  }
+}

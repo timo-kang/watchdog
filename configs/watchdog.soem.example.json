@@ -1,0 +1,80 @@
+{
+  "poll_interval": "2s",
+  "incident_dir": "./var/incidents",
+  "log_transitions_only": true,
+  "actions": {
+    "unix_socket": {
+      "enabled": true,
+      "socket_path": "./var/run/watchdog/supervisor.sock",
+      "send_resolved": true,
+      "spool_dir": "./var/spool/watchdog/actions",
+      "replay_batch_size": 64
+    }
+  },
+  "sources": {
+    "host": {
+      "enabled": true
+    },
+    "module_reports": {
+      "enabled": true,
+      "socket_path": "./var/run/watchdog/module.sock",
+      "max_message_bytes": 4096,
+      "default_stale_after": "5s"
+    },
+    "systemd": {
+      "enabled": false,
+      "units": []
+    },
+    "can": {
+      "enabled": false,
+      "backend": "socketcan",
+      "interfaces": []
+    },
+    "ethercat": {
+      "enabled": true,
+      "backend": "soem",
+      "masters": [
+        {
+          "name": "master0",
+          "source_id": "actuators",
+          "expected_state": "op",
+          "expected_slaves": 12,
+          "require_link": true,
+          "probe_command": [
+            "/usr/local/bin/watchdog-soem-probe",
+            "--master",
+            "master0"
+          ]
+        }
+      ]
+    }
+  },
+  "rules": {
+    "host": {
+      "max_cpu_temp_warn_c": 85,
+      "max_cpu_temp_critical_c": 95,
+      "max_temp_warn_c": 90,
+      "max_temp_critical_c": 100,
+      "mem_available_warn_mb": 1024,
+      "mem_available_critical_mb": 512,
+      "load_ratio_warn": 1.0,
+      "load_ratio_critical": 1.5
+    },
+    "process": {
+      "restart_warn": 1,
+      "restart_fail": 3
+    },
+    "can": {
+      "missing_nodes_warn": 1,
+      "missing_nodes_fail": 2,
+      "restart_warn": 1,
+      "restart_fail": 3
+    },
+    "ethercat": {
+      "missing_slaves_warn": 1,
+      "missing_slaves_fail": 2,
+      "wkc_warn_ratio": 0.95,
+      "wkc_fail_ratio": 0.8
+    }
+  }
+}
