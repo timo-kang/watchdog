@@ -44,6 +44,10 @@ type SourcesConfig struct {
 	Systemd       SystemdSourceConfig      `json:"systemd"`
 	CAN           CANSourceConfig          `json:"can"`
 	EtherCAT      EtherCATSourceConfig     `json:"ethercat"`
+	Network       NetworkSourceConfig      `json:"network"`
+	Power         PowerSourceConfig        `json:"power"`
+	Storage       StorageSourceConfig      `json:"storage"`
+	TimeSync      TimeSyncSourceConfig     `json:"time_sync"`
 }
 
 type HostSourceConfig struct {
@@ -103,12 +107,59 @@ type EtherCATMasterConfig struct {
 	ProbeCommand   []string `json:"probe_command"`
 }
 
+type NetworkSourceConfig struct {
+	Enabled    bool                     `json:"enabled"`
+	Interfaces []NetworkInterfaceConfig `json:"interfaces"`
+}
+
+type NetworkInterfaceConfig struct {
+	Name         string `json:"name"`
+	SourceID     string `json:"source_id"`
+	RequireUp    bool   `json:"require_up"`
+	MinSpeedMbps int    `json:"min_speed_mbps"`
+}
+
+type PowerSourceConfig struct {
+	Enabled  bool                `json:"enabled"`
+	Supplies []PowerSupplyConfig `json:"supplies"`
+}
+
+type PowerSupplyConfig struct {
+	Name           string `json:"name"`
+	SourceID       string `json:"source_id"`
+	RequirePresent bool   `json:"require_present"`
+	RequireOnline  bool   `json:"require_online"`
+}
+
+type StorageSourceConfig struct {
+	Enabled bool                 `json:"enabled"`
+	Mounts  []StorageMountConfig `json:"mounts"`
+}
+
+type StorageMountConfig struct {
+	Path            string `json:"path"`
+	SourceID        string `json:"source_id"`
+	Device          string `json:"device"`
+	RequireWritable bool   `json:"require_writable"`
+}
+
+type TimeSyncSourceConfig struct {
+	Enabled             bool   `json:"enabled"`
+	SourceID            string `json:"source_id"`
+	RequireSynchronized bool   `json:"require_synchronized"`
+	WarnOnLocalRTC      bool   `json:"warn_on_local_rtc"`
+}
+
 type fileSources struct {
 	Host          HostSourceConfig       `json:"host"`
 	ModuleReports fileModuleReportSource `json:"module_reports"`
 	Systemd       fileSystemdSource      `json:"systemd"`
 	CAN           CANSourceConfig        `json:"can"`
 	EtherCAT      EtherCATSourceConfig   `json:"ethercat"`
+	Network       NetworkSourceConfig    `json:"network"`
+	Power         PowerSourceConfig      `json:"power"`
+	Storage       StorageSourceConfig    `json:"storage"`
+	TimeSync      TimeSyncSourceConfig   `json:"time_sync"`
 }
 
 type fileModuleReportSource struct {
@@ -128,6 +179,10 @@ type RulesConfig struct {
 	Process  ProcessRules  `json:"process"`
 	CAN      CANRules      `json:"can"`
 	EtherCAT EtherCATRules `json:"ethercat"`
+	Network  NetworkRules  `json:"network"`
+	Power    PowerRules    `json:"power"`
+	Storage  StorageRules  `json:"storage"`
+	TimeSync TimeSyncRules `json:"time_sync"`
 }
 
 type HostRules struct {
@@ -158,6 +213,32 @@ type EtherCATRules struct {
 	MissingSlavesFail int     `json:"missing_slaves_fail"`
 	WKCWarnRatio      float64 `json:"wkc_warn_ratio"`
 	WKCFailRatio      float64 `json:"wkc_fail_ratio"`
+}
+
+type NetworkRules struct {
+	ErrorDeltaWarn float64 `json:"error_delta_warn"`
+	DropDeltaWarn  float64 `json:"drop_delta_warn"`
+}
+
+type PowerRules struct {
+	CapacityWarnPct float64 `json:"capacity_warn_pct"`
+	CapacityFailPct float64 `json:"capacity_fail_pct"`
+	TempWarnC       float64 `json:"temp_warn_c"`
+	TempFailC       float64 `json:"temp_fail_c"`
+}
+
+type StorageRules struct {
+	UsedPercentWarn float64 `json:"used_percent_warn"`
+	UsedPercentFail float64 `json:"used_percent_fail"`
+	AvailWarnMB     float64 `json:"avail_warn_mb"`
+	AvailFailMB     float64 `json:"avail_fail_mb"`
+	BusyPercentWarn float64 `json:"busy_percent_warn"`
+	BusyPercentFail float64 `json:"busy_percent_fail"`
+}
+
+type TimeSyncRules struct {
+	RTCDeltaWarnS float64 `json:"rtc_delta_warn_s"`
+	RTCDeltaFailS float64 `json:"rtc_delta_fail_s"`
 }
 
 func Load(path string) (Config, error) {
@@ -217,6 +298,44 @@ func Load(path string) (Config, error) {
 					},
 				},
 			},
+			Network: NetworkSourceConfig{
+				Enabled: false,
+				Interfaces: []NetworkInterfaceConfig{
+					{
+						Name:         "eth0",
+						SourceID:     "uplink",
+						RequireUp:    true,
+						MinSpeedMbps: 100,
+					},
+				},
+			},
+			Power: PowerSourceConfig{
+				Enabled: false,
+				Supplies: []PowerSupplyConfig{
+					{
+						Name:           "BAT0",
+						SourceID:       "main-battery",
+						RequirePresent: true,
+						RequireOnline:  false,
+					},
+				},
+			},
+			Storage: StorageSourceConfig{
+				Enabled: false,
+				Mounts: []StorageMountConfig{
+					{
+						Path:            "/",
+						SourceID:        "rootfs",
+						RequireWritable: true,
+					},
+				},
+			},
+			TimeSync: TimeSyncSourceConfig{
+				Enabled:             false,
+				SourceID:            "system-clock",
+				RequireSynchronized: true,
+				WarnOnLocalRTC:      true,
+			},
 		},
 		Rules: RulesConfig{
 			Host: HostRules{
@@ -244,6 +363,28 @@ func Load(path string) (Config, error) {
 				MissingSlavesFail: 2,
 				WKCWarnRatio:      0.95,
 				WKCFailRatio:      0.80,
+			},
+			Network: NetworkRules{
+				ErrorDeltaWarn: 1,
+				DropDeltaWarn:  1,
+			},
+			Power: PowerRules{
+				CapacityWarnPct: 30,
+				CapacityFailPct: 15,
+				TempWarnC:       50,
+				TempFailC:       60,
+			},
+			Storage: StorageRules{
+				UsedPercentWarn: 85,
+				UsedPercentFail: 95,
+				AvailWarnMB:     2048,
+				AvailFailMB:     512,
+				BusyPercentWarn: 90,
+				BusyPercentFail: 98,
+			},
+			TimeSync: TimeSyncRules{
+				RTCDeltaWarnS: 30,
+				RTCDeltaFailS: 120,
 			},
 		},
 	}
@@ -311,6 +452,19 @@ func Load(path string) (Config, error) {
 			Backend: raw.Sources.EtherCAT.Backend,
 			Masters: append([]EtherCATMasterConfig(nil), raw.Sources.EtherCAT.Masters...),
 		},
+		Network: NetworkSourceConfig{
+			Enabled:    raw.Sources.Network.Enabled,
+			Interfaces: append([]NetworkInterfaceConfig(nil), raw.Sources.Network.Interfaces...),
+		},
+		Power: PowerSourceConfig{
+			Enabled:  raw.Sources.Power.Enabled,
+			Supplies: append([]PowerSupplyConfig(nil), raw.Sources.Power.Supplies...),
+		},
+		Storage: StorageSourceConfig{
+			Enabled: raw.Sources.Storage.Enabled,
+			Mounts:  append([]StorageMountConfig(nil), raw.Sources.Storage.Mounts...),
+		},
+		TimeSync: raw.Sources.TimeSync,
 	}
 
 	if sources.ModuleReports.Enabled && sources.ModuleReports.SocketPath == "" {
@@ -370,6 +524,45 @@ func Load(path string) (Config, error) {
 			return Config{}, fmt.Errorf("sources.ethercat.masters[%d].probe_command must not be empty for backend %q", i, sources.EtherCAT.Backend)
 		}
 	}
+	if sources.Network.Enabled && len(sources.Network.Interfaces) == 0 {
+		return Config{}, fmt.Errorf("sources.network.interfaces must not be empty when enabled")
+	}
+	for i, iface := range sources.Network.Interfaces {
+		if iface.Name == "" {
+			return Config{}, fmt.Errorf("sources.network.interfaces[%d].name must not be empty", i)
+		}
+		if iface.SourceID == "" {
+			sources.Network.Interfaces[i].SourceID = iface.Name
+		}
+		if iface.MinSpeedMbps < 0 {
+			return Config{}, fmt.Errorf("sources.network.interfaces[%d].min_speed_mbps must be >= 0", i)
+		}
+	}
+	if sources.Power.Enabled && len(sources.Power.Supplies) == 0 {
+		return Config{}, fmt.Errorf("sources.power.supplies must not be empty when enabled")
+	}
+	for i, supply := range sources.Power.Supplies {
+		if supply.Name == "" {
+			return Config{}, fmt.Errorf("sources.power.supplies[%d].name must not be empty", i)
+		}
+		if supply.SourceID == "" {
+			sources.Power.Supplies[i].SourceID = supply.Name
+		}
+	}
+	if sources.Storage.Enabled && len(sources.Storage.Mounts) == 0 {
+		return Config{}, fmt.Errorf("sources.storage.mounts must not be empty when enabled")
+	}
+	for i, mount := range sources.Storage.Mounts {
+		if mount.Path == "" {
+			return Config{}, fmt.Errorf("sources.storage.mounts[%d].path must not be empty", i)
+		}
+		if mount.SourceID == "" {
+			sources.Storage.Mounts[i].SourceID = sanitizeSourceID(mount.Path)
+		}
+	}
+	if sources.TimeSync.Enabled && sources.TimeSync.SourceID == "" {
+		sources.TimeSync.SourceID = "system-clock"
+	}
 
 	return Config{
 		PollInterval:       interval,
@@ -379,6 +572,16 @@ func Load(path string) (Config, error) {
 		Sources:            sources,
 		Rules:              raw.Rules,
 	}, nil
+}
+
+func sanitizeSourceID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "/" {
+		return "rootfs"
+	}
+	value = strings.TrimPrefix(value, "/")
+	value = strings.ReplaceAll(value, "/", "-")
+	return value
 }
 
 func backendRequiresProbeCommand(backend string) bool {

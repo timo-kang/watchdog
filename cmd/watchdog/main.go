@@ -14,7 +14,11 @@ import (
 	"watchdog/internal/adapters/ethercat"
 	"watchdog/internal/adapters/host"
 	"watchdog/internal/adapters/module"
+	"watchdog/internal/adapters/network"
+	"watchdog/internal/adapters/power"
+	"watchdog/internal/adapters/storage"
 	"watchdog/internal/adapters/systemd"
+	"watchdog/internal/adapters/timesync"
 	"watchdog/internal/app"
 	"watchdog/internal/config"
 	"watchdog/internal/incident"
@@ -47,6 +51,18 @@ func main() {
 	}
 	if cfg.Sources.EtherCAT.Enabled {
 		collectors = append(collectors, ethercat.New(cfg.Sources.EtherCAT))
+	}
+	if cfg.Sources.Network.Enabled {
+		collectors = append(collectors, network.New(cfg.Sources.Network))
+	}
+	if cfg.Sources.Power.Enabled {
+		collectors = append(collectors, power.New(cfg.Sources.Power))
+	}
+	if cfg.Sources.Storage.Enabled {
+		collectors = append(collectors, storage.New(cfg.Sources.Storage))
+	}
+	if cfg.Sources.TimeSync.Enabled {
+		collectors = append(collectors, timesync.New(cfg.Sources.TimeSync))
 	}
 
 	if len(collectors) == 0 {

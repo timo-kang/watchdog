@@ -315,3 +315,223 @@ func TestEvaluateCANDoesNotInferMissingNodesWhenUnknown(t *testing.T) {
 		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityOK)
 	}
 }
+
+func TestEvaluateNetworkFailsWhenRequiredLinkIsDown(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Network: config.NetworkRules{
+			ErrorDeltaWarn: 1,
+			DropDeltaWarn:  1,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "uplink",
+		SourceType:  "network",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"network.link_up":        0,
+			"network.require_up":     1,
+			"network.speed_mbps":     1000,
+			"network.min_speed_mbps": 100,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+}
+
+func TestEvaluateNetworkWarnsOnErrorDelta(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Network: config.NetworkRules{
+			ErrorDeltaWarn: 1,
+			DropDeltaWarn:  5,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "uplink",
+		SourceType:  "network",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"network.link_up":         1,
+			"network.require_up":      1,
+			"network.rx_errors_delta": 1,
+			"network.tx_errors_delta": 0,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityWarn {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityWarn)
+	}
+}
+
+func TestEvaluatePowerFailsOnLowCapacity(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Power: config.PowerRules{
+			CapacityWarnPct: 30,
+			CapacityFailPct: 15,
+			TempWarnC:       50,
+			TempFailC:       60,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "main-battery",
+		SourceType:  "power",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"power.present":         1,
+			"power.online":          1,
+			"power.capacity_pct":    12,
+			"power.require_present": 1,
+		},
+		Labels: map[string]string{
+			"health": "good",
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+}
+
+func TestEvaluatePowerFailsOnBadHealthLabel(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Power: config.PowerRules{
+			CapacityWarnPct: 30,
+			CapacityFailPct: 15,
+			TempWarnC:       50,
+			TempFailC:       60,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "main-battery",
+		SourceType:  "power",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"power.present": 1,
+			"power.online":  1,
+		},
+		Labels: map[string]string{
+			"health": "overheat",
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+}
+
+func TestEvaluateStorageFailsWhenWritableMountTurnsReadOnly(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Storage: config.StorageRules{
+			UsedPercentWarn: 85,
+			UsedPercentFail: 95,
+			AvailWarnMB:     2048,
+			AvailFailMB:     512,
+			BusyPercentWarn: 90,
+			BusyPercentFail: 98,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "rootfs",
+		SourceType:  "storage",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"storage.require_writable": 1,
+			"storage.readonly":         1,
+			"storage.used_percent":     40,
+			"storage.avail_bytes":      10 * 1024 * 1024 * 1024,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+}
+
+func TestEvaluateStorageWarnsOnBusyDevice(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Storage: config.StorageRules{
+			UsedPercentWarn: 85,
+			UsedPercentFail: 95,
+			AvailWarnMB:     2048,
+			AvailFailMB:     512,
+			BusyPercentWarn: 90,
+			BusyPercentFail: 98,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "rootfs",
+		SourceType:  "storage",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"storage.readonly":     0,
+			"storage.used_percent": 40,
+			"storage.avail_bytes":  10 * 1024 * 1024 * 1024,
+			"storage.busy_percent": 91,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityWarn {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityWarn)
+	}
+}
+
+func TestEvaluateTimeSyncFailsWhenUnsynchronized(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		TimeSync: config.TimeSyncRules{
+			RTCDeltaWarnS: 30,
+			RTCDeltaFailS: 120,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "system-clock",
+		SourceType:  "time_sync",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"time.require_sync":     1,
+			"time.ntp_synchronized": 0,
+			"time.can_ntp":          1,
+			"time.ntp_enabled":      1,
+			"time.local_rtc":        0,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+}
+
+func TestEvaluateTimeSyncWarnsOnLocalRTCDrift(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		TimeSync: config.TimeSyncRules{
+			RTCDeltaWarnS: 30,
+			RTCDeltaFailS: 120,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "system-clock",
+		SourceType:  "time_sync",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"time.require_sync":      1,
+			"time.ntp_synchronized":  1,
+			"time.can_ntp":           1,
+			"time.ntp_enabled":       1,
+			"time.warn_on_local_rtc": 1,
+			"time.local_rtc":         1,
+			"time.rtc_delta_s":       45,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityWarn {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityWarn)
+	}
+}

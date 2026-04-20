@@ -9,6 +9,9 @@ This repository is intentionally separate from CI/build-server profiling scripts
 - CAN bus health
 - EtherCAT master/slave state
 - network/link health
+- battery and power-supply state
+- storage pressure and IO pressure
+- time synchronization and RTC drift
 - sensor freshness and module deadlines
 
 ## Current Scope
@@ -26,6 +29,10 @@ The first scaffold provides:
 - a rule evaluator with warn/fail thresholds
 - a Unix datagram ingest socket for module reports from C++ or other local processes
 - a `systemd` adapter for supervised service state and restart counts
+- a generic Linux network adapter backed by `/sys/class/net` and `/proc/net/dev`
+- a generic Linux power-supply adapter backed by `/sys/class/power_supply`
+- a generic Linux storage adapter backed by `statfs`, `/proc/self/mountinfo`, and `/proc/diskstats`
+- a generic Linux time-sync adapter backed by `timedatectl show`
 - stale detection for missing module heartbeats
 - transition logging
 - incident snapshot writing on degraded transitions
@@ -33,6 +40,18 @@ The first scaffold provides:
 - a sample `systemd` unit
 
 This is not yet the full robot watchdog. It is the base control-plane service that later adapters can plug into.
+
+For first real-robot trials, the intended mandatory baseline is:
+
+- host runtime health
+- network health
+- power or BMS health
+- storage pressure
+- time synchronization
+- module heartbeats
+- supervised process state
+
+That gives you infrastructure coverage before adding robot-specific device adapters for gimbals, manipulators, radios, AI accelerators, sensor blocks, and other internal subsystems.
 
 ## Repository Layout
 
@@ -99,6 +118,8 @@ Local status can be inspected with:
 go run ./cmd/watchdogctl status -config ./configs/watchdog-supervisor.example.json
 ```
 
+For a first robot-oriented baseline, start from `configs/watchdog.robot-baseline.example.json` and adapt the interface names, power-supply names, service names, and bus probes to your platform before deployment.
+
 ## Roadmap
 
 The project milestones live in [`docs/milestones.md`](docs/milestones.md). Treat that file as the contract for what counts as `M0`, `M1`, and later production/open-source readiness.
@@ -106,6 +127,23 @@ The project milestones live in [`docs/milestones.md`](docs/milestones.md). Treat
 The bus integration handoff checklist lives in [`docs/bus-integration.md`](docs/bus-integration.md).
 
 The watchdog-to-supervisor contract lives in [`docs/action-interface.md`](docs/action-interface.md).
+
+## Mandatory Infrastructure Adapters
+
+The first non-bus robot baseline should turn on these source families:
+
+- `network`: link state, interface speed, RX/TX counters, error deltas, and drop deltas
+- `power`: battery or PSU presence, online state, capacity, temperature, and supply health when the kernel exports them
+- `storage`: filesystem free space, read-only state, inode pressure, and disk busy percentage when device stats are available
+- `time_sync`: `timedatectl`-based NTP state, RTC drift, and `LocalRTC` misconfiguration
+
+Those adapters are intentionally Linux-generic. They are meant to get you through the first robot bring-up safely. After real-robot testing, add deeper robot-specific adapters where the failures actually show up, for example:
+
+- BMS or power-rail probes beyond generic `power_supply`
+- modem or multi-link network module probes beyond interface counters
+- sensor freshness and packet-age producers
+- manipulator, gimbal, or AI compute module health producers
+- vendor-specific storage or accelerator telemetry
 
 ## Module Health Ingest
 

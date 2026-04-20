@@ -34,6 +34,24 @@
       "enabled": false,
       "backend": "igh",
       "masters": []
+    },
+    "network": {
+      "enabled": false,
+      "interfaces": []
+    },
+    "power": {
+      "enabled": false,
+      "supplies": []
+    },
+    "storage": {
+      "enabled": false,
+      "mounts": []
+    },
+    "time_sync": {
+      "enabled": false,
+      "source_id": "system-clock",
+      "require_synchronized": true,
+      "warn_on_local_rtc": true
     }
   },
   "rules": {
@@ -62,6 +80,28 @@
       "missing_slaves_fail": 2,
       "wkc_warn_ratio": 0.95,
       "wkc_fail_ratio": 0.8
+    },
+    "network": {
+      "error_delta_warn": 1,
+      "drop_delta_warn": 1
+    },
+    "power": {
+      "capacity_warn_pct": 30,
+      "capacity_fail_pct": 15,
+      "temp_warn_c": 50,
+      "temp_fail_c": 60
+    },
+    "storage": {
+      "used_percent_warn": 85,
+      "used_percent_fail": 95,
+      "avail_warn_mb": 2048,
+      "avail_fail_mb": 512,
+      "busy_percent_warn": 90,
+      "busy_percent_fail": 98
+    },
+    "time_sync": {
+      "rtc_delta_warn_s": 30,
+      "rtc_delta_fail_s": 120
     }
   }
 }

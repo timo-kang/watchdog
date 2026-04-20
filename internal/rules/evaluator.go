@@ -41,6 +41,14 @@ func (e *Evaluator) Evaluate(observation health.Observation) health.Status {
 		return e.evaluateCAN(status)
 	case "ethercat":
 		return e.evaluateEtherCAT(status)
+	case "network":
+		return e.evaluateNetwork(status)
+	case "power":
+		return e.evaluatePower(status)
+	case "storage":
+		return e.evaluateStorage(status)
+	case "time_sync":
+		return e.evaluateTimeSync(status)
 	default:
 		return status
 	}
@@ -273,6 +281,162 @@ func (e *Evaluator) evaluateEtherCAT(status health.Status) health.Status {
 		case rules.WKCWarnRatio > 0 && ratio < rules.WKCWarnRatio:
 			update(health.SeverityWarn, fmt.Sprintf("wkc ratio %.2f < warn %.2f", ratio, rules.WKCWarnRatio))
 		}
+	}
+
+	status.Reason = strings.Join(reasons, "; ")
+	return status
+}
+
+func (e *Evaluator) evaluateNetwork(status health.Status) health.Status {
+	rules := e.cfg.Network
+	var reasons []string
+
+	update := func(next health.Severity, reason string) {
+		if health.CompareSeverity(next, status.Severity) > 0 {
+			status.Severity = next
+		}
+		reasons = append(reasons, reason)
+	}
+
+	if metric(status.Metrics, "network.require_up") > 0 && metric(status.Metrics, "network.link_up") <= 0 {
+		update(health.SeverityFail, "link is down")
+	}
+
+	minSpeed := metric(status.Metrics, "network.min_speed_mbps")
+	speed := metric(status.Metrics, "network.speed_mbps")
+	if minSpeed > 0 && speed > 0 && speed < minSpeed {
+		update(health.SeverityWarn, fmt.Sprintf("speed %.0fMbps < min %.0fMbps", speed, minSpeed))
+	}
+
+	errorDelta := metric(status.Metrics, "network.rx_errors_delta") + metric(status.Metrics, "network.tx_errors_delta")
+	if rules.ErrorDeltaWarn > 0 && errorDelta >= rules.ErrorDeltaWarn {
+		update(health.SeverityWarn, fmt.Sprintf("error delta %.0f >= warn %.0f", errorDelta, rules.ErrorDeltaWarn))
+	}
+	dropDelta := metric(status.Metrics, "network.rx_dropped_delta") + metric(status.Metrics, "network.tx_dropped_delta")
+	if rules.DropDeltaWarn > 0 && dropDelta >= rules.DropDeltaWarn {
+		update(health.SeverityWarn, fmt.Sprintf("drop delta %.0f >= warn %.0f", dropDelta, rules.DropDeltaWarn))
+	}
+
+	status.Reason = strings.Join(reasons, "; ")
+	return status
+}
+
+func (e *Evaluator) evaluatePower(status health.Status) health.Status {
+	rules := e.cfg.Power
+	var reasons []string
+
+	update := func(next health.Severity, reason string) {
+		if health.CompareSeverity(next, status.Severity) > 0 {
+			status.Severity = next
+		}
+		reasons = append(reasons, reason)
+	}
+
+	if metric(status.Metrics, "power.require_present") > 0 && metric(status.Metrics, "power.present") <= 0 {
+		update(health.SeverityFail, "power supply not present")
+	}
+	if metric(status.Metrics, "power.require_online") > 0 && metric(status.Metrics, "power.online") <= 0 {
+		update(health.SeverityFail, "power supply offline")
+	}
+
+	capacity := metric(status.Metrics, "power.capacity_pct")
+	switch {
+	case rules.CapacityFailPct > 0 && capacity > 0 && capacity <= rules.CapacityFailPct:
+		update(health.SeverityFail, fmt.Sprintf("capacity %.1f%% <= fail %.1f%%", capacity, rules.CapacityFailPct))
+	case rules.CapacityWarnPct > 0 && capacity > 0 && capacity <= rules.CapacityWarnPct:
+		update(health.SeverityWarn, fmt.Sprintf("capacity %.1f%% <= warn %.1f%%", capacity, rules.CapacityWarnPct))
+	}
+
+	tempC := metric(status.Metrics, "power.temp_c")
+	switch {
+	case rules.TempFailC > 0 && tempC >= rules.TempFailC:
+		update(health.SeverityFail, fmt.Sprintf("temperature %.1fC >= fail %.1fC", tempC, rules.TempFailC))
+	case rules.TempWarnC > 0 && tempC >= rules.TempWarnC:
+		update(health.SeverityWarn, fmt.Sprintf("temperature %.1fC >= warn %.1fC", tempC, rules.TempWarnC))
+	}
+
+	switch healthLabel := strings.ToLower(label(status.Labels, "health")); healthLabel {
+	case "", "good", "ok":
+	case "unknown":
+		update(health.SeverityWarn, `health "unknown"`)
+	default:
+		update(health.SeverityFail, fmt.Sprintf("health %q", healthLabel))
+	}
+
+	status.Reason = strings.Join(reasons, "; ")
+	return status
+}
+
+func (e *Evaluator) evaluateStorage(status health.Status) health.Status {
+	rules := e.cfg.Storage
+	var reasons []string
+
+	update := func(next health.Severity, reason string) {
+		if health.CompareSeverity(next, status.Severity) > 0 {
+			status.Severity = next
+		}
+		reasons = append(reasons, reason)
+	}
+
+	if metric(status.Metrics, "storage.require_writable") > 0 && metric(status.Metrics, "storage.readonly") > 0 {
+		update(health.SeverityFail, "filesystem is read-only")
+	}
+
+	usedPct := metric(status.Metrics, "storage.used_percent")
+	switch {
+	case rules.UsedPercentFail > 0 && usedPct >= rules.UsedPercentFail:
+		update(health.SeverityFail, fmt.Sprintf("used %.1f%% >= fail %.1f%%", usedPct, rules.UsedPercentFail))
+	case rules.UsedPercentWarn > 0 && usedPct >= rules.UsedPercentWarn:
+		update(health.SeverityWarn, fmt.Sprintf("used %.1f%% >= warn %.1f%%", usedPct, rules.UsedPercentWarn))
+	}
+
+	availMB := metric(status.Metrics, "storage.avail_bytes") / (1024 * 1024)
+	switch {
+	case rules.AvailFailMB > 0 && availMB <= rules.AvailFailMB:
+		update(health.SeverityFail, fmt.Sprintf("available %.0fMB <= fail %.0fMB", availMB, rules.AvailFailMB))
+	case rules.AvailWarnMB > 0 && availMB <= rules.AvailWarnMB:
+		update(health.SeverityWarn, fmt.Sprintf("available %.0fMB <= warn %.0fMB", availMB, rules.AvailWarnMB))
+	}
+
+	busyPct := metric(status.Metrics, "storage.busy_percent")
+	switch {
+	case rules.BusyPercentFail > 0 && busyPct >= rules.BusyPercentFail:
+		update(health.SeverityFail, fmt.Sprintf("busy %.1f%% >= fail %.1f%%", busyPct, rules.BusyPercentFail))
+	case rules.BusyPercentWarn > 0 && busyPct >= rules.BusyPercentWarn:
+		update(health.SeverityWarn, fmt.Sprintf("busy %.1f%% >= warn %.1f%%", busyPct, rules.BusyPercentWarn))
+	}
+
+	status.Reason = strings.Join(reasons, "; ")
+	return status
+}
+
+func (e *Evaluator) evaluateTimeSync(status health.Status) health.Status {
+	rules := e.cfg.TimeSync
+	var reasons []string
+
+	update := func(next health.Severity, reason string) {
+		if health.CompareSeverity(next, status.Severity) > 0 {
+			status.Severity = next
+		}
+		reasons = append(reasons, reason)
+	}
+
+	if metric(status.Metrics, "time.require_sync") > 0 && metric(status.Metrics, "time.ntp_synchronized") <= 0 {
+		update(health.SeverityFail, "clock is not synchronized")
+	}
+	if metric(status.Metrics, "time.require_sync") > 0 && metric(status.Metrics, "time.can_ntp") > 0 && metric(status.Metrics, "time.ntp_enabled") <= 0 {
+		update(health.SeverityWarn, "NTP is disabled")
+	}
+	if metric(status.Metrics, "time.warn_on_local_rtc") > 0 && metric(status.Metrics, "time.local_rtc") > 0 {
+		update(health.SeverityWarn, "LocalRTC is enabled")
+	}
+
+	rtcDelta := metric(status.Metrics, "time.rtc_delta_s")
+	switch {
+	case rules.RTCDeltaFailS > 0 && rtcDelta >= rules.RTCDeltaFailS:
+		update(health.SeverityFail, fmt.Sprintf("RTC delta %.1fs >= fail %.1fs", rtcDelta, rules.RTCDeltaFailS))
+	case rules.RTCDeltaWarnS > 0 && rtcDelta >= rules.RTCDeltaWarnS:
+		update(health.SeverityWarn, fmt.Sprintf("RTC delta %.1fs >= warn %.1fs", rtcDelta, rules.RTCDeltaWarnS))
 	}
 
 	status.Reason = strings.Join(reasons, "; ")

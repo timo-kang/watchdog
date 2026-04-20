@@ -67,11 +67,15 @@ Out:
    Output:
    - CPU throttling/frequency/power support
    - memory pressure, disk pressure, and network basics
+   - generic Linux power-supply and time-sync coverage
    - process liveness integration
    - richer incident snapshots
    Exit criteria:
    - host degradation causes structured incidents with enough evidence for first-line diagnosis
    - rule coverage exists for the common host failure modes on a robot compute node
+   Current progress:
+   - generic Linux collectors are in place for network, storage, power-supply, and time-sync state
+   - rule coverage exists for link-down, low-capacity battery, read-only or full filesystems, and unsynchronized clocks
 
 4. `M3 Robot Adapters`
    Output:
@@ -152,4 +156,13 @@ Out:
 
 ## Recommendation
 
-Finish `M0` by stabilizing the local module interface and adding process identity/restart metadata to the supervision path. After that, move directly to `M1` protocol documentation and a second producer example before adding bus-specific adapters.
+Use the current next phase to harden the mandatory infrastructure baseline before broad robot trials:
+
+- host runtime
+- network
+- power or BMS
+- storage
+- time synchronization
+- module heartbeat and process supervision
+
+After that baseline is exercised on real robots, add the next adapters based on observed failures rather than guessing ahead for every subsystem.
