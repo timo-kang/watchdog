@@ -98,6 +98,70 @@ Typical files to copy to the robot:
 
 If the robot architecture differs from your build machine, cross-compile by setting `GOOS` and `GOARCH` on the build machine before running `go build`.
 
+## Ubuntu 24.04 x86_64 Deploy
+
+The repository now includes a safe production deploy baseline for Ubuntu 24.04 x86_64:
+
+- `configs/watchdog.ubuntu24-amd64.json`
+- `configs/watchdog-supervisor.ubuntu24-amd64.json`
+
+Those files use production-style absolute paths:
+
+- `/usr/local/bin/watchdog`
+- `/usr/local/bin/watchdog-supervisor`
+- `/usr/local/bin/watchdogctl`
+- `/etc/watchdog/watchdog.json`
+- `/etc/watchdog/watchdog-supervisor.json`
+- `/run/watchdog/*.sock`
+- `/var/lib/watchdog/...`
+
+The Ubuntu 24.04 config is intentionally safe for first boot:
+
+- enabled by default: `host`, `storage`, `time_sync`, module ingest, supervisor actions
+- disabled until you edit real platform names: `systemd`, `network`, `power`, `can`, `ethercat`
+
+That means you can start monitoring immediately on a generic Ubuntu 24.04 x86_64 node without guessing interface or battery names, then turn on the remaining adapters once the robot-specific values are known.
+
+Install example:
+
+```bash
+sudo install -d /etc/watchdog
+sudo install -m 0755 dist/linux-amd64/watchdog /usr/local/bin/watchdog
+sudo install -m 0755 dist/linux-amd64/watchdog-supervisor /usr/local/bin/watchdog-supervisor
+sudo install -m 0755 dist/linux-amd64/watchdogctl /usr/local/bin/watchdogctl
+sudo install -m 0644 configs/watchdog.ubuntu24-amd64.json /etc/watchdog/watchdog.json
+sudo install -m 0644 configs/watchdog-supervisor.ubuntu24-amd64.json /etc/watchdog/watchdog-supervisor.json
+sudo install -m 0644 deploy/systemd/watchdog.service /etc/systemd/system/watchdog.service
+sudo install -m 0644 deploy/systemd/watchdog-supervisor.service /etc/systemd/system/watchdog-supervisor.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now watchdog-supervisor watchdog
+```
+
+To inspect monitoring after startup:
+
+```bash
+sudo journalctl -u watchdog -f
+sudo journalctl -u watchdog-supervisor -f
+sudo /usr/local/bin/watchdogctl status -config /etc/watchdog/watchdog-supervisor.json
+```
+
+On-device outputs land here:
+
+- incidents: `/var/lib/watchdog/incidents/`
+- action spool: `/var/lib/watchdog/actions/`
+- supervisor state: `/var/lib/watchdog/supervisor/current_state.json`
+- latest supervisor record: `/var/lib/watchdog/supervisor/latest.json`
+- supervisor audit history: `/var/lib/watchdog/supervisor/requests/`
+
+For a fuller robot bring-up, start from `configs/watchdog.robot-baseline.example.json` and merge in your real:
+
+- `systemd` unit names
+- network interface names and minimum speeds
+- power-supply or battery names
+- CAN interfaces and bitrates
+- SOEM probe command path
+
+
 ## Run
 
 ```bash
@@ -119,6 +183,8 @@ go run ./cmd/watchdogctl status -config ./configs/watchdog-supervisor.example.js
 ```
 
 For a first robot-oriented baseline, start from `configs/watchdog.robot-baseline.example.json` and adapt the interface names, power-supply names, service names, and bus probes to your platform before deployment.
+
+Release artifacts publish a `linux-amd64` bundle with the binaries, Ubuntu 24.04 x86_64 configs, and `systemd` unit files ready to copy onto the target machine.
 
 ## Roadmap
 

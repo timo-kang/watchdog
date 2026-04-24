@@ -1,0 +1,118 @@
+{
+  "poll_interval": "2s",
+  "incident_dir": "/var/lib/watchdog/incidents",
+  "log_transitions_only": true,
+  "actions": {
+    "unix_socket": {
+      "enabled": true,
+      "socket_path": "/run/watchdog/supervisor.sock",
+      "send_resolved": true,
+      "spool_dir": "/var/lib/watchdog/actions",
+      "replay_batch_size": 64
+    }
+  },
+  "sources": {
+    "host": {
+      "enabled": true
+    },
+    "module_reports": {
+      "enabled": true,
+      "socket_path": "/run/watchdog/module.sock",
+      "max_message_bytes": 4096,
+      "default_stale_after": "5s"
+    },
+    "systemd": {
+      "enabled": false,
+      "units": []
+    },
+    "can": {
+      "enabled": false,
+      "backend": "socketcan",
+      "interfaces": []
+    },
+    "ethercat": {
+      "enabled": false,
+      "backend": "soem",
+      "masters": []
+    },
+    "network": {
+      "enabled": false,
+      "interfaces": []
+    },
+    "power": {
+      "enabled": false,
+      "supplies": []
+    },
+    "storage": {
+      "enabled": true,
+      "mounts": [
+        {
+          "path": "/",
+          "source_id": "rootfs",
+          "require_writable": true
+        },
+        {
+          "path": "/var/log",
+          "source_id": "var-log",
+          "require_writable": true
+        }
+      ]
+    },
+    "time_sync": {
+      "enabled": true,
+      "source_id": "system-clock",
+      "require_synchronized": true,
+      "warn_on_local_rtc": true
+    }
+  },
+  "rules": {
+    "host": {
+      "max_cpu_temp_warn_c": 85,
+      "max_cpu_temp_critical_c": 95,
+      "max_temp_warn_c": 90,
+      "max_temp_critical_c": 100,
+      "mem_available_warn_mb": 1024,
+      "mem_available_critical_mb": 512,
+      "load_ratio_warn": 1.0,
+      "load_ratio_critical": 1.5
+    },
+    "process": {
+      "restart_warn": 1,
+      "restart_fail": 3
+    },
+    "can": {
+      "missing_nodes_warn": 1,
+      "missing_nodes_fail": 2,
+      "restart_warn": 1,
+      "restart_fail": 3
+    },
+    "ethercat": {
+      "missing_slaves_warn": 1,
+      "missing_slaves_fail": 2,
+      "wkc_warn_ratio": 0.95,
+      "wkc_fail_ratio": 0.8
+    },
+    "network": {
+      "error_delta_warn": 1,
+      "drop_delta_warn": 1
+    },
+    "power": {
+      "capacity_warn_pct": 30,
+      "capacity_fail_pct": 15,
+      "temp_warn_c": 50,
+      "temp_fail_c": 60
+    },
+    "storage": {
+      "used_percent_warn": 85,
+      "used_percent_fail": 95,
+      "avail_warn_mb": 2048,
+      "avail_fail_mb": 512,
+      "busy_percent_warn": 90,
+      "busy_percent_fail": 98
+    },
+    "time_sync": {
+      "rtc_delta_warn_s": 30,
+      "rtc_delta_fail_s": 120
+    }
+  }
+}
