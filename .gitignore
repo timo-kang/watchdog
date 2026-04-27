@@ -2,3 +2,7 @@ bin/
 dist/
 var/
 
+/watchdog
+/watchdog-supervisor
+/watchdogctl
+/watchdog-sim-module

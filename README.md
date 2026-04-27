@@ -297,6 +297,57 @@ Important:
 
 With a real module or simulator process, point its local watchdog client at `./var/run/watchdog/module.sock` and emit one JSON heartbeat per control/report cycle or at a bounded health interval.
 
+## Docker Sim
+
+For a quick end-to-end simulation without installing the binaries onto a robot, use the Docker compose stack in `deploy/docker/docker-compose.sim.yml`.
+
+What it runs:
+
+- `watchdog-supervisor`
+- `watchdog`
+- `planner-sim`, which sends 5 `warn` heartbeats and then exits
+
+That makes the stack demonstrate the real sequence:
+
+1. module reports `warn`
+2. watchdog stays fresh while heartbeats arrive
+3. simulator exits
+4. watchdog marks the module `stale`
+5. supervisor latches `degrade`
+
+Run it:
+
+```bash
+docker compose -f deploy/docker/docker-compose.sim.yml up --build
+```
+
+Inspect it from another terminal:
+
+```bash
+docker compose -f deploy/docker/docker-compose.sim.yml logs -f watchdog watchdog-supervisor planner-sim
+docker compose -f deploy/docker/docker-compose.sim.yml exec watchdog-supervisor /usr/local/bin/watchdogctl status -config /configs/watchdog-supervisor.docker-sim.json
+```
+
+Expected `watchdogctl` outcome after the simulator stops and `stale_after` expires:
+
+- `Overall: degrade`
+- active component `planner`
+- state `stale -> degrade [latched]`
+
+Tear it down and remove volumes:
+
+```bash
+docker compose -f deploy/docker/docker-compose.sim.yml down -v
+```
+
+The sim configs are:
+
+- `configs/watchdog.docker-sim.json`
+- `configs/watchdog-supervisor.docker-sim.json`
+
+Those intentionally disable host, storage, time-sync, and bus adapters so the simulation focuses on the module-to-watchdog-to-supervisor flow first.
+
+
 ## Process Supervision
 
 The first process supervision path is a `systemd` collector. It polls configured units and emits `process` observations with:

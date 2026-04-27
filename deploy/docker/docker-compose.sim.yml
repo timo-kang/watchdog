@@ -1,0 +1,62 @@
+services:
+  watchdog-supervisor:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: watchdog-sim:dev
+    command: ["/usr/local/bin/watchdog-supervisor", "-config", "/configs/watchdog-supervisor.docker-sim.json"]
+    volumes:
+      - ../../configs:/configs:ro
+      - watchdog-run:/run/watchdog
+      - watchdog-var:/var/lib/watchdog
+
+  watchdog:
+    image: watchdog-sim:dev
+    depends_on:
+      - watchdog-supervisor
+    command: ["/usr/local/bin/watchdog", "-config", "/configs/watchdog.docker-sim.json"]
+    volumes:
+      - ../../configs:/configs:ro
+      - watchdog-run:/run/watchdog
+      - watchdog-var:/var/lib/watchdog
+
+  planner-sim:
+    image: watchdog-sim:dev
+    depends_on:
+      - watchdog
+    command:
+      - "/usr/local/bin/watchdog-sim-module"
+      - "-socket"
+      - "/run/watchdog/module.sock"
+      - "-source-id"
+      - "planner"
+      - "-severity"
+      - "warn"
+      - "-reason"
+      - "deadline miss"
+      - "-interval"
+      - "1s"
+      - "-stale-after"
+      - "1500ms"
+      - "-count"
+      - "5"
+      - "-metric"
+      - "deadline_miss_ms=18.5"
+      - "-label"
+      - "process=planner_main"
+    volumes:
+      - watchdog-run:/run/watchdog
+
+  watchdogctl:
+    image: watchdog-sim:dev
+    profiles: ["tools"]
+    depends_on:
+      - watchdog-supervisor
+    command: ["/usr/local/bin/watchdogctl", "status", "-config", "/configs/watchdog-supervisor.docker-sim.json"]
+    volumes:
+      - ../../configs:/configs:ro
+      - watchdog-var:/var/lib/watchdog
+
+volumes:
+  watchdog-run:
+  watchdog-var:
