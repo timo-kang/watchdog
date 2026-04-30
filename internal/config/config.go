@@ -144,22 +144,31 @@ type StorageMountConfig struct {
 }
 
 type TimeSyncSourceConfig struct {
+	Enabled             bool
+	SourceID            string
+	RequireSynchronized bool
+	WarnOnLocalRTC      bool
+	SyncGracePeriod     time.Duration
+}
+
+type fileTimeSyncSourceConfig struct {
 	Enabled             bool   `json:"enabled"`
 	SourceID            string `json:"source_id"`
 	RequireSynchronized bool   `json:"require_synchronized"`
 	WarnOnLocalRTC      bool   `json:"warn_on_local_rtc"`
+	SyncGracePeriod     string `json:"sync_grace_period"`
 }
 
 type fileSources struct {
-	Host          HostSourceConfig       `json:"host"`
-	ModuleReports fileModuleReportSource `json:"module_reports"`
-	Systemd       fileSystemdSource      `json:"systemd"`
-	CAN           CANSourceConfig        `json:"can"`
-	EtherCAT      EtherCATSourceConfig   `json:"ethercat"`
-	Network       NetworkSourceConfig    `json:"network"`
-	Power         PowerSourceConfig      `json:"power"`
-	Storage       StorageSourceConfig    `json:"storage"`
-	TimeSync      TimeSyncSourceConfig   `json:"time_sync"`
+	Host          HostSourceConfig         `json:"host"`
+	ModuleReports fileModuleReportSource   `json:"module_reports"`
+	Systemd       fileSystemdSource        `json:"systemd"`
+	CAN           CANSourceConfig          `json:"can"`
+	EtherCAT      EtherCATSourceConfig     `json:"ethercat"`
+	Network       NetworkSourceConfig      `json:"network"`
+	Power         PowerSourceConfig        `json:"power"`
+	Storage       StorageSourceConfig      `json:"storage"`
+	TimeSync      fileTimeSyncSourceConfig `json:"time_sync"`
 }
 
 type fileModuleReportSource struct {
@@ -330,11 +339,12 @@ func Load(path string) (Config, error) {
 					},
 				},
 			},
-			TimeSync: TimeSyncSourceConfig{
+			TimeSync: fileTimeSyncSourceConfig{
 				Enabled:             false,
 				SourceID:            "system-clock",
 				RequireSynchronized: true,
 				WarnOnLocalRTC:      true,
+				SyncGracePeriod:     "10m",
 			},
 		},
 		Rules: RulesConfig{
@@ -408,6 +418,9 @@ func Load(path string) (Config, error) {
 	if raw.IncidentDir == "" {
 		return Config{}, fmt.Errorf("incident_dir must not be empty")
 	}
+	if strings.TrimSpace(raw.Sources.TimeSync.SyncGracePeriod) == "" {
+		raw.Sources.TimeSync.SyncGracePeriod = "10m"
+	}
 	if raw.Actions.UnixSocket.Enabled && raw.Actions.UnixSocket.SocketPath == "" {
 		return Config{}, fmt.Errorf("actions.unix_socket.socket_path must not be empty when enabled")
 	}
@@ -428,6 +441,13 @@ func Load(path string) (Config, error) {
 
 	if raw.Sources.ModuleReports.MaxMessageBytes <= 0 {
 		return Config{}, fmt.Errorf("sources.module_reports.max_message_bytes must be positive")
+	}
+	timeSyncGracePeriod, err := time.ParseDuration(raw.Sources.TimeSync.SyncGracePeriod)
+	if err != nil {
+		return Config{}, fmt.Errorf("parse sources.time_sync.sync_grace_period: %w", err)
+	}
+	if timeSyncGracePeriod < 0 {
+		return Config{}, fmt.Errorf("sources.time_sync.sync_grace_period must be >= 0")
 	}
 
 	sources := SourcesConfig{
@@ -464,7 +484,13 @@ func Load(path string) (Config, error) {
 			Enabled: raw.Sources.Storage.Enabled,
 			Mounts:  append([]StorageMountConfig(nil), raw.Sources.Storage.Mounts...),
 		},
-		TimeSync: raw.Sources.TimeSync,
+		TimeSync: TimeSyncSourceConfig{
+			Enabled:             raw.Sources.TimeSync.Enabled,
+			SourceID:            raw.Sources.TimeSync.SourceID,
+			RequireSynchronized: raw.Sources.TimeSync.RequireSynchronized,
+			WarnOnLocalRTC:      raw.Sources.TimeSync.WarnOnLocalRTC,
+			SyncGracePeriod:     timeSyncGracePeriod,
+		},
 	}
 
 	if sources.ModuleReports.Enabled && sources.ModuleReports.SocketPath == "" {

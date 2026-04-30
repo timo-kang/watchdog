@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -533,5 +534,65 @@ func TestEvaluateTimeSyncWarnsOnLocalRTCDrift(t *testing.T) {
 	status := evaluator.Evaluate(observation)
 	if status.Severity != health.SeverityWarn {
 		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityWarn)
+	}
+}
+
+func TestEvaluateTimeSyncWarnsDuringSyncGracePeriod(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		TimeSync: config.TimeSyncRules{
+			RTCDeltaWarnS: 30,
+			RTCDeltaFailS: 120,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "system-clock",
+		SourceType:  "time_sync",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"time.require_sync":         1,
+			"time.ntp_synchronized":     0,
+			"time.can_ntp":              1,
+			"time.ntp_enabled":          1,
+			"time.sync_grace_s":         600,
+			"time.unsynchronized_for_s": 120,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityWarn {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityWarn)
+	}
+	if status.Reason == "" || !strings.Contains(status.Reason, "grace remaining") {
+		t.Fatalf("reason = %q, want grace remaining", status.Reason)
+	}
+}
+
+func TestEvaluateTimeSyncFailsAfterSyncGracePeriod(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		TimeSync: config.TimeSyncRules{
+			RTCDeltaWarnS: 30,
+			RTCDeltaFailS: 120,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "system-clock",
+		SourceType:  "time_sync",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"time.require_sync":         1,
+			"time.ntp_synchronized":     0,
+			"time.can_ntp":              1,
+			"time.ntp_enabled":          1,
+			"time.sync_grace_s":         600,
+			"time.unsynchronized_for_s": 601,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+	if status.Reason == "" || !strings.Contains(status.Reason, ">= grace") {
+		t.Fatalf("reason = %q, want >= grace", status.Reason)
 	}
 }

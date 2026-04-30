@@ -11,19 +11,19 @@ import (
 )
 
 type Writer struct {
-	dir string
+	dir             string
+	transitionsOnly bool
 }
 
-func New(dir string) *Writer {
-	return &Writer{dir: dir}
+func New(dir string, transitionsOnly bool) *Writer {
+	return &Writer{dir: dir, transitionsOnly: transitionsOnly}
 }
 
 func (w *Writer) MaybeWrite(previous *health.Snapshot, next health.Snapshot) (string, error) {
 	if next.Overall == health.SeverityOK {
 		return "", nil
 	}
-
-	if previous != nil && health.CompareSeverity(next.Overall, previous.Overall) <= 0 && next.Overall != health.SeverityFail {
+	if w.transitionsOnly && previous != nil && health.EquivalentAlertState(*previous, next) {
 		return "", nil
 	}
 
@@ -38,8 +38,28 @@ func (w *Writer) MaybeWrite(previous *health.Snapshot, next health.Snapshot) (st
 	if err != nil {
 		return "", fmt.Errorf("marshal incident: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return "", fmt.Errorf("write incident: %w", err)
+
+	temp, err := os.CreateTemp(w.dir, ".incident-*.tmp")
+	if err != nil {
+		return "", fmt.Errorf("create temp incident: %w", err)
+	}
+	tempPath := temp.Name()
+	defer func() {
+		_ = os.Remove(tempPath)
+	}()
+	if _, err := temp.Write(data); err != nil {
+		_ = temp.Close()
+		return "", fmt.Errorf("write temp incident: %w", err)
+	}
+	if err := temp.Chmod(0o644); err != nil {
+		_ = temp.Close()
+		return "", fmt.Errorf("chmod temp incident: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return "", fmt.Errorf("close temp incident: %w", err)
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return "", fmt.Errorf("rename incident: %w", err)
 	}
 	return path, nil
 }

@@ -422,7 +422,16 @@ func (e *Evaluator) evaluateTimeSync(status health.Status) health.Status {
 	}
 
 	if metric(status.Metrics, "time.require_sync") > 0 && metric(status.Metrics, "time.ntp_synchronized") <= 0 {
-		update(health.SeverityFail, "clock is not synchronized")
+		grace := metric(status.Metrics, "time.sync_grace_s")
+		unsynchronizedFor := metric(status.Metrics, "time.unsynchronized_for_s")
+		switch {
+		case grace > 0 && unsynchronizedFor < grace:
+			update(health.SeverityWarn, fmt.Sprintf("clock is not synchronized; %.0fs grace remaining", grace-unsynchronizedFor))
+		case grace > 0:
+			update(health.SeverityFail, fmt.Sprintf("clock is not synchronized for %.0fs >= grace %.0fs", unsynchronizedFor, grace))
+		default:
+			update(health.SeverityFail, "clock is not synchronized")
+		}
 	}
 	if metric(status.Metrics, "time.require_sync") > 0 && metric(status.Metrics, "time.can_ntp") > 0 && metric(status.Metrics, "time.ntp_enabled") <= 0 {
 		update(health.SeverityWarn, "NTP is disabled")

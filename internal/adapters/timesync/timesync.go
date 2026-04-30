@@ -15,8 +15,10 @@ import (
 var _ adapters.Collector = (*Collector)(nil)
 
 type Collector struct {
-	cfg  config.TimeSyncSourceConfig
-	show func(context.Context) ([]byte, error)
+	cfg                 config.TimeSyncSourceConfig
+	show                func(context.Context) ([]byte, error)
+	now                 func() time.Time
+	unsynchronizedSince time.Time
 }
 
 type syncState struct {
@@ -33,6 +35,7 @@ func New(cfg config.TimeSyncSourceConfig) *Collector {
 	return &Collector{
 		cfg:  cfg,
 		show: runTimedatectlShow,
+		now:  time.Now,
 	}
 }
 
@@ -50,6 +53,7 @@ func (c *Collector) Collect(ctx context.Context) ([]health.Observation, error) {
 		return nil, err
 	}
 
+	now := c.now()
 	metrics := map[string]float64{
 		"time.can_ntp":           boolMetric(state.canNTP),
 		"time.ntp_enabled":       boolMetric(state.ntpEnabled),
@@ -57,6 +61,7 @@ func (c *Collector) Collect(ctx context.Context) ([]health.Observation, error) {
 		"time.local_rtc":         boolMetric(state.localRTC),
 		"time.require_sync":      boolMetric(c.cfg.RequireSynchronized),
 		"time.warn_on_local_rtc": boolMetric(c.cfg.WarnOnLocalRTC),
+		"time.sync_grace_s":      c.cfg.SyncGracePeriod.Seconds(),
 	}
 	if !state.systemTime.IsZero() && !state.rtcTime.IsZero() {
 		delta := state.systemTime.Sub(state.rtcTime).Seconds()
@@ -64,6 +69,14 @@ func (c *Collector) Collect(ctx context.Context) ([]health.Observation, error) {
 			delta = -delta
 		}
 		metrics["time.rtc_delta_s"] = delta
+	}
+	if c.cfg.RequireSynchronized && !state.ntpSynchronized {
+		if c.unsynchronizedSince.IsZero() {
+			c.unsynchronizedSince = now
+		}
+		metrics["time.unsynchronized_for_s"] = now.Sub(c.unsynchronizedSince).Seconds()
+	} else {
+		c.unsynchronizedSince = time.Time{}
 	}
 
 	labels := map[string]string{
@@ -74,7 +87,7 @@ func (c *Collector) Collect(ctx context.Context) ([]health.Observation, error) {
 	return []health.Observation{{
 		SourceID:    c.cfg.SourceID,
 		SourceType:  "time_sync",
-		CollectedAt: time.Now(),
+		CollectedAt: now,
 		Metrics:     metrics,
 		Labels:      labels,
 	}}, nil

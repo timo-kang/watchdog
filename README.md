@@ -35,7 +35,7 @@ The first scaffold provides:
 - a generic Linux time-sync adapter backed by `timedatectl show`
 - stale detection for missing module heartbeats
 - transition logging
-- incident snapshot writing on degraded transitions
+- incident snapshot writing on degraded transitions without repeated identical fail storms
 - optional Unix-datagram action requests to a local supervisor
 - a sample `systemd` unit
 
@@ -201,7 +201,7 @@ The first non-bus robot baseline should turn on these source families:
 - `network`: link state, interface speed, RX/TX counters, error deltas, and drop deltas
 - `power`: battery or PSU presence, online state, capacity, temperature, and supply health when the kernel exports them
 - `storage`: filesystem free space, read-only state, inode pressure, and disk busy percentage when device stats are available
-- `time_sync`: `timedatectl`-based NTP state, RTC drift, and `LocalRTC` misconfiguration
+- `time_sync`: `timedatectl`-based NTP state, RTC drift, `LocalRTC` misconfiguration, and a configurable synchronization grace window
 
 Those adapters are intentionally Linux-generic. They are meant to get you through the first robot bring-up safely. After real-robot testing, add deeper robot-specific adapters where the failures actually show up, for example:
 

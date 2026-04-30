@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadRequiresActionSocketPathWhenEnabled(t *testing.T) {
@@ -412,5 +413,47 @@ func TestLoadDefaultsSourceIDsForMandatoryInfraSources(t *testing.T) {
 	}
 	if got := cfg.Sources.TimeSync.SourceID; got != "system-clock" {
 		t.Fatalf("time_sync source_id = %q, want system-clock", got)
+	}
+}
+
+func TestLoadParsesTimeSyncGracePeriod(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "watchdog.json")
+	data := `{
+		"poll_interval": "2s",
+		"incident_dir": "./var/incidents",
+		"sources": {
+			"host": {"enabled": false},
+			"module_reports": {
+				"enabled": false,
+				"socket_path": "./var/run/watchdog/module.sock",
+				"max_message_bytes": 4096,
+				"default_stale_after": "5s"
+			},
+			"systemd": {"enabled": false, "units": []},
+			"can": {"enabled": false, "backend": "socketcan", "interfaces": []},
+			"ethercat": {"enabled": false, "backend": "igh", "masters": []},
+			"network": {"enabled": false, "interfaces": []},
+			"power": {"enabled": false, "supplies": []},
+			"storage": {"enabled": false, "mounts": []},
+			"time_sync": {
+				"enabled": true,
+				"source_id": "system-clock",
+				"require_synchronized": true,
+				"warn_on_local_rtc": true,
+				"sync_grace_period": "15m"
+			}
+		},
+		"rules": {}
+	}`
+	if err := os.WriteFile(configPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.Sources.TimeSync.SyncGracePeriod != 15*time.Minute {
+		t.Fatalf("time_sync sync_grace_period = %s, want 15m", cfg.Sources.TimeSync.SyncGracePeriod)
 	}
 }

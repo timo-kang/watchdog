@@ -70,7 +70,7 @@ func main() {
 	}
 
 	evaluator := rules.New(cfg.Rules)
-	incidentWriter := incident.New(cfg.IncidentDir)
+	incidentWriter := incident.New(cfg.IncidentDir, cfg.LogTransitionsOnly)
 	actionSink := actions.NewMultiSink(
 		actions.NewTransitionLogger(logger, cfg.LogTransitionsOnly),
 		buildSocketSink(cfg),

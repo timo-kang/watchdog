@@ -123,7 +123,8 @@
       "enabled": true,
       "source_id": "system-clock",
       "require_synchronized": true,
-      "warn_on_local_rtc": true
+      "warn_on_local_rtc": true,
+      "sync_grace_period": "10m"
     }
   },
   "rules": {
