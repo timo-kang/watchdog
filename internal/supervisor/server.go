@@ -15,12 +15,14 @@ import (
 	"time"
 
 	"watchdog/internal/actions"
+	"watchdog/internal/metrics"
 )
 
 type Server struct {
-	logger *log.Logger
-	cfg    Config
-	state  *Manager
+	logger   *log.Logger
+	cfg      Config
+	state    *Manager
+	observer *metrics.SupervisorCollector
 }
 
 type AuditRecord struct {
@@ -44,10 +46,11 @@ type HookResult struct {
 	Action            actions.Kind `json:"action"`
 }
 
-func NewServer(logger *log.Logger, cfg Config) *Server {
+func NewServer(logger *log.Logger, cfg Config, observer *metrics.SupervisorCollector) *Server {
 	return &Server{
-		logger: logger,
-		cfg:    cfg,
+		logger:   logger,
+		cfg:      cfg,
+		observer: observer,
 	}
 }
 
@@ -75,6 +78,9 @@ func (s *Server) Run(ctx context.Context) error {
 		return err
 	}
 	s.state = state
+	if s.observer != nil {
+		s.observer.ObserveState(supervisorStateView(state.Snapshot()))
+	}
 
 	if err := removeStaleSocket(s.cfg.SocketPath); err != nil {
 		return err
@@ -132,6 +138,9 @@ func (s *Server) handlePayload(ctx context.Context, payload []byte) error {
 
 	recordPath := filepath.Join(s.cfg.AuditDir, request.RequestID+".json")
 	if _, err := os.Stat(recordPath); err == nil {
+		if s.observer != nil {
+			s.observer.ObserveRequest(request, "duplicate")
+		}
 		s.logger.Printf("duplicate request_id=%s action=%s", request.RequestID, request.RequestedAction)
 		return nil
 	} else if !os.IsNotExist(err) {
@@ -142,8 +151,15 @@ func (s *Server) handlePayload(ctx context.Context, payload []byte) error {
 	if err != nil {
 		return err
 	}
+	if s.observer != nil {
+		s.observer.ObserveState(supervisorStateView(decision.State))
+		s.observer.ObserveRequest(request, "applied")
+	}
 
 	result, err := s.dispatchHook(ctx, request, payload, decision)
+	if s.observer != nil {
+		s.observer.ObserveHook(supervisorHookView(decision, result))
+	}
 	record := AuditRecord{
 		ReceivedAt: time.Now().UTC(),
 		Request:    request,
@@ -317,4 +333,41 @@ func componentIDs(components []actions.ComponentRequest) []string {
 		out = append(out, component.ComponentID)
 	}
 	return out
+}
+
+func supervisorStateView(state State) metrics.SupervisorStateView {
+	view := metrics.SupervisorStateView{
+		UpdatedAt:     state.UpdatedAt,
+		OverallAction: state.OverallAction,
+	}
+	if len(state.ActiveComponents) == 0 {
+		return view
+	}
+	view.ActiveComponents = make([]metrics.SupervisorComponentView, 0, len(state.ActiveComponents))
+	for _, component := range state.ActiveComponents {
+		view.ActiveComponents = append(view.ActiveComponents, metrics.SupervisorComponentView{
+			ComponentID: component.ComponentID,
+			Action:      component.ActiveAction,
+			Severity:    component.Severity,
+			Latched:     component.Latched,
+		})
+	}
+	return view
+}
+
+func supervisorHookView(decision ApplyResult, result *HookResult) metrics.SupervisorHookView {
+	view := metrics.SupervisorHookView{
+		Action:            decision.HookAction,
+		CommandConfigured: result != nil && len(result.Command) > 0,
+	}
+	if result == nil {
+		return view
+	}
+	view.Executed = result.Executed
+	view.Suppressed = result.Suppressed
+	view.Errored = result.Error != ""
+	if result.DurationMs > 0 {
+		view.Duration = time.Duration(result.DurationMs) * time.Millisecond
+	}
+	return view
 }

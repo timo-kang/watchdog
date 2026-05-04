@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Watchdog
+    orgId: 1
+    folder: Watchdog
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

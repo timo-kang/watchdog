@@ -8,6 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"watchdog/internal/actions"
 	"watchdog/internal/adapters"
 	"watchdog/internal/adapters/can"
@@ -22,6 +24,7 @@ import (
 	"watchdog/internal/app"
 	"watchdog/internal/config"
 	"watchdog/internal/incident"
+	"watchdog/internal/metrics"
 	"watchdog/internal/rules"
 )
 
@@ -69,18 +72,36 @@ func main() {
 		logger.Fatal("no collectors enabled")
 	}
 
+	registry := prometheus.NewRegistry()
+	watchdogMetrics := metrics.NewWatchdogCollector()
+	registry.MustRegister(
+		prometheus.NewGoCollector(),
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+		watchdogMetrics,
+	)
+
 	evaluator := rules.New(cfg.Rules)
 	incidentWriter := incident.New(cfg.IncidentDir, cfg.LogTransitionsOnly)
 	actionSink := actions.NewMultiSink(
 		actions.NewTransitionLogger(logger, cfg.LogTransitionsOnly),
 		buildSocketSink(cfg),
 	)
-	daemon := app.New(logger, cfg.PollInterval, collectors, evaluator, incidentWriter, actionSink)
+	daemon := app.New(logger, cfg.PollInterval, collectors, evaluator, incidentWriter, actionSink, watchdogMetrics)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	if err := daemon.Run(ctx); err != nil {
+	errCh := make(chan error, 2)
+	go func() {
+		errCh <- daemon.Run(ctx)
+	}()
+	if cfg.Metrics.Enabled {
+		go func() {
+			errCh <- metrics.Serve(ctx, logger, "watchdog", cfg.Metrics, registry)
+		}()
+	}
+
+	if err := <-errCh; err != nil {
 		logger.Fatalf("run watchdog: %v", err)
 	}
 }

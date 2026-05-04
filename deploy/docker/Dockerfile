@@ -1,6 +1,6 @@
 FROM golang:1.22-bookworm AS builder
 WORKDIR /src
-COPY go.mod ./
+COPY go.mod go.sum ./
 COPY cmd ./cmd
 COPY internal ./internal
 RUN mkdir -p /out \

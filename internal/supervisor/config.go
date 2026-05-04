@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"watchdog/internal/metrics"
 )
 
 type Config struct {
@@ -12,6 +14,7 @@ type Config struct {
 	AuditDir    string
 	LatestPath  string
 	StatePath   string
+	Metrics     metrics.EndpointConfig
 	HookTimeout time.Duration
 	Cooldowns   CooldownConfig
 	Hooks       HookConfig
@@ -32,13 +35,14 @@ type HookConfig struct {
 }
 
 type fileConfig struct {
-	SocketPath  string             `json:"socket_path"`
-	AuditDir    string             `json:"audit_dir"`
-	LatestPath  string             `json:"latest_path"`
-	StatePath   string             `json:"state_path"`
-	HookTimeout string             `json:"hook_timeout"`
-	Cooldowns   fileCooldownConfig `json:"cooldowns"`
-	Hooks       HookConfig         `json:"hooks"`
+	SocketPath  string                 `json:"socket_path"`
+	AuditDir    string                 `json:"audit_dir"`
+	LatestPath  string                 `json:"latest_path"`
+	StatePath   string                 `json:"state_path"`
+	Metrics     metrics.EndpointConfig `json:"metrics"`
+	HookTimeout string                 `json:"hook_timeout"`
+	Cooldowns   fileCooldownConfig     `json:"cooldowns"`
+	Hooks       HookConfig             `json:"hooks"`
 }
 
 type fileCooldownConfig struct {
@@ -54,6 +58,7 @@ func LoadConfig(path string) (Config, error) {
 		AuditDir:    "./var/lib/watchdog/supervisor/requests",
 		LatestPath:  "./var/lib/watchdog/supervisor/latest.json",
 		StatePath:   "./var/lib/watchdog/supervisor/current_state.json",
+		Metrics:     metrics.DefaultEndpoint("127.0.0.1:9109"),
 		HookTimeout: "5s",
 		Cooldowns: fileCooldownConfig{
 			Notify:   "30s",
@@ -80,6 +85,10 @@ func LoadConfig(path string) (Config, error) {
 	if raw.StatePath == "" {
 		return Config{}, fmt.Errorf("state_path must not be empty")
 	}
+	raw.Metrics = metrics.NormalizeEndpoint(raw.Metrics, "127.0.0.1:9109")
+	if err := metrics.ValidateEndpoint("metrics", raw.Metrics); err != nil {
+		return Config{}, err
+	}
 
 	timeout, err := time.ParseDuration(raw.HookTimeout)
 	if err != nil {
@@ -99,6 +108,7 @@ func LoadConfig(path string) (Config, error) {
 		AuditDir:    raw.AuditDir,
 		LatestPath:  raw.LatestPath,
 		StatePath:   raw.StatePath,
+		Metrics:     raw.Metrics,
 		HookTimeout: timeout,
 		Cooldowns:   cooldowns,
 		Hooks:       raw.Hooks,

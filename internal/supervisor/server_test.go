@@ -38,7 +38,7 @@ func TestServerProcessesAndDedupesRequests(t *testing.T) {
 		},
 	}
 
-	server := NewServer(log.New(io.Discard, "", 0), cfg)
+	server := NewServer(log.New(io.Discard, "", 0), cfg, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

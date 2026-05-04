@@ -2,6 +2,11 @@
   "poll_interval": "2s",
   "incident_dir": "/var/lib/watchdog/incidents",
   "log_transitions_only": true,
+  "metrics": {
+    "enabled": true,
+    "listen_address": "127.0.0.1:9108",
+    "path": "/metrics"
+  },
   "actions": {
     "unix_socket": {
       "enabled": true,

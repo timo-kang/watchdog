@@ -8,6 +8,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus"
+
+	"watchdog/internal/metrics"
 	"watchdog/internal/supervisor"
 )
 
@@ -21,12 +24,29 @@ func main() {
 	}
 
 	logger := log.New(os.Stdout, "watchdog-supervisor ", log.LstdFlags|log.Lmicroseconds)
-	server := supervisor.NewServer(logger, cfg)
+	registry := prometheus.NewRegistry()
+	supervisorMetrics := metrics.NewSupervisorCollector()
+	registry.MustRegister(
+		prometheus.NewGoCollector(),
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+		supervisorMetrics,
+	)
+	server := supervisor.NewServer(logger, cfg, supervisorMetrics)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	if err := server.Run(ctx); err != nil {
+	errCh := make(chan error, 2)
+	go func() {
+		errCh <- server.Run(ctx)
+	}()
+	if cfg.Metrics.Enabled {
+		go func() {
+			errCh <- metrics.Serve(ctx, logger, "watchdog-supervisor", cfg.Metrics, registry)
+		}()
+	}
+
+	if err := <-errCh; err != nil {
 		logger.Fatalf("run supervisor: %v", err)
 	}
 }

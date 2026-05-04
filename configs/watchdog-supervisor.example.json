@@ -3,6 +3,11 @@
   "audit_dir": "./var/lib/watchdog/supervisor/requests",
   "latest_path": "./var/lib/watchdog/supervisor/latest.json",
   "state_path": "./var/lib/watchdog/supervisor/current_state.json",
+  "metrics": {
+    "enabled": true,
+    "listen_address": "127.0.0.1:9109",
+    "path": "/metrics"
+  },
   "hook_timeout": "5s",
   "cooldowns": {
     "notify": "30s",

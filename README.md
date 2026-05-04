@@ -31,6 +31,8 @@ Current local action policy:
 - EtherCAT lost slave or required link down -> `safe_stop`
 - recovery -> `resolve`
 
+Prometheus-compatible `/metrics` endpoints are now built into both `watchdog` and `watchdog-supervisor`, so the same surface can feed Prometheus, Grafana, or Datadog OpenMetrics collection.
+
 ## Install From Release
 
 The published Linux target today is Ubuntu 24.04 x86_64.
@@ -126,6 +128,13 @@ Service logs:
 - `journalctl -u watchdog`
 - `journalctl -u watchdog-supervisor`
 
+Metrics endpoints:
+
+- `watchdog`: `127.0.0.1:9108/metrics`
+- `watchdog-supervisor`: `127.0.0.1:9109/metrics`
+
+If Grafana is running on a different machine, these loopback binds are not reachable from it. In that case, use the `remote-metrics` example configs and scrape the robot's real IP or hostname instead.
+
 ## How To Inspect It
 
 Live logs:
@@ -150,6 +159,97 @@ sudo jq . /var/lib/watchdog/supervisor/current_state.json
 sudo jq . /var/lib/watchdog/supervisor/latest.json
 sudo ls -lt /var/lib/watchdog/incidents
 ```
+
+## Prometheus and Grafana
+
+Both processes can expose Prometheus-compatible metrics:
+
+```json
+"metrics": {
+  "enabled": true,
+  "listen_address": "127.0.0.1:9108",
+  "path": "/metrics"
+}
+```
+
+Use loopback if Prometheus runs on the robot. Use a real interface bind such as `0.0.0.0:9108` only when a central Prometheus server is meant to scrape the robot directly.
+
+The repository includes a local observability stack for the Docker sim:
+
+- `deploy/observability/prometheus/prometheus.docker-sim.yml`
+- `deploy/observability/grafana/provisioning/...`
+- `deploy/observability/grafana/dashboards/watchdog-overview.json`
+
+Run it with the simulator:
+
+```bash
+docker compose -f deploy/docker/docker-compose.sim.yml --profile observability up --build
+```
+
+Then open:
+
+- Prometheus: `http://localhost:9091`
+- Grafana: `http://localhost:3300`
+  - login: `admin`
+  - password: `admin`
+
+The provisioned Grafana dashboard is `Watchdog Overview`.
+
+### Central Prometheus Scraping Real Robots
+
+For a monitoring server or laptop that scrapes one or more robots directly:
+
+1. On each robot, make the metrics endpoints reachable.
+   Start from:
+   - `configs/watchdog.ubuntu24-amd64.remote-metrics.example.json`
+   - `configs/watchdog-supervisor.ubuntu24-amd64.remote-metrics.example.json`
+
+2. Install those as:
+   - `/etc/watchdog/watchdog.json`
+   - `/etc/watchdog/watchdog-supervisor.json`
+
+3. Restart the services:
+
+```bash
+sudo systemctl restart watchdog-supervisor watchdog
+```
+
+4. From the monitoring server, verify basic reachability before opening Grafana:
+
+```bash
+curl http://ROBOT_IP:9108/metrics
+curl http://ROBOT_IP:9109/metrics
+```
+
+If Prometheus runs in Docker on the same Linux machine as the robot processes, use `host.docker.internal:9108` and `host.docker.internal:9109` in the Prometheus target list. The provided `docker-compose.server.yml` already maps `host.docker.internal` to the host gateway.
+
+5. Run the central observability stack:
+
+```bash
+cd deploy/observability
+$EDITOR prometheus/prometheus.robot-server.example.yml
+docker compose -f docker-compose.server.yml up -d
+```
+
+Then open:
+
+- Prometheus: `http://SERVER_IP:9091`
+- Grafana: `http://SERVER_IP:3300`
+
+If you see "no data" in Grafana, the first checks should be:
+
+```bash
+curl http://ROBOT_IP:9108/metrics
+curl http://ROBOT_IP:9109/metrics
+curl http://SERVER_IP:9091/api/v1/targets
+```
+
+The common failure cases are:
+
+- Prometheus is still scraping the Docker sim targets instead of the robot IPs
+- robot metrics are still bound to `127.0.0.1`
+- firewall or network policy blocks `9108` or `9109`
+- Prometheus target entries do not match the robot address
 
 ## Time Sync Behavior
 
@@ -255,6 +355,7 @@ docker compose -f deploy/docker/docker-compose.sim.yml exec watchdog-supervisor 
 - `docs/milestones.md`: project milestones
 - `docs/bus-integration.md`: CAN and EtherCAT integration handoff
 - `docs/action-interface.md`: watchdog to supervisor contract
+- `docs/observability.md`: metrics, Prometheus, Grafana, and dashboard notes
 
 ## Current Boundaries
 

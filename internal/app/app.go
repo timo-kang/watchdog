@@ -21,9 +21,17 @@ type App struct {
 	evaluator    *rules.Evaluator
 	incident     *incident.Writer
 	actionSink   actions.Sink
+	observer     Observer
 	lastSnapshot *health.Snapshot
 	hostname     string
 	started      bool
+}
+
+type Observer interface {
+	ObserveCollectorResult(name string, duration time.Duration, err error)
+	ObserveSnapshot(snapshot health.Snapshot)
+	ObserveIncidentWrite(written bool, err error)
+	ObserveActionSink(err error)
 }
 
 func New(
@@ -33,6 +41,7 @@ func New(
 	evaluator *rules.Evaluator,
 	incidentWriter *incident.Writer,
 	actionSink actions.Sink,
+	observer Observer,
 ) *App {
 	hostname, _ := os.Hostname()
 	return &App{
@@ -42,6 +51,7 @@ func New(
 		evaluator:  evaluator,
 		incident:   incidentWriter,
 		actionSink: actionSink,
+		observer:   observer,
 		hostname:   hostname,
 	}
 }
@@ -105,7 +115,12 @@ func (a *App) tick(ctx context.Context) error {
 	var errors []string
 
 	for _, collector := range a.collectors {
+		startedAt := time.Now()
 		observations, err := collector.Collect(ctx)
+		duration := time.Since(startedAt)
+		if a.observer != nil {
+			a.observer.ObserveCollectorResult(collector.Name(), duration, err)
+		}
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("%s: %v", collector.Name(), err))
 			statuses = append(statuses, health.Status{
@@ -131,14 +146,25 @@ func (a *App) tick(ctx context.Context) error {
 		Errors:      errors,
 	}
 	snapshot.Overall = health.OverallFromComponents(snapshot.Components)
+	if a.observer != nil {
+		a.observer.ObserveSnapshot(snapshot)
+	}
 
 	incidentPath, err := a.incident.MaybeWrite(a.lastSnapshot, snapshot)
+	if a.observer != nil {
+		a.observer.ObserveIncidentWrite(incidentPath != "", err)
+	}
 	if err != nil {
 		a.logger.Printf("write incident: %v", err)
 	}
 
 	if err := a.actionSink.HandleTransition(ctx, a.lastSnapshot, snapshot, incidentPath); err != nil {
+		if a.observer != nil {
+			a.observer.ObserveActionSink(err)
+		}
 		a.logger.Printf("action sink: %v", err)
+	} else if a.observer != nil {
+		a.observer.ObserveActionSink(nil)
 	}
 
 	a.lastSnapshot = &snapshot

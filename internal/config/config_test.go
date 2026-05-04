@@ -457,3 +457,50 @@ func TestLoadParsesTimeSyncGracePeriod(t *testing.T) {
 		t.Fatalf("time_sync sync_grace_period = %s, want 15m", cfg.Sources.TimeSync.SyncGracePeriod)
 	}
 }
+
+func TestLoadParsesMetricsEndpoint(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "watchdog.json")
+	data := `{
+		"poll_interval": "2s",
+		"incident_dir": "./var/incidents",
+		"metrics": {
+			"enabled": true,
+			"listen_address": "127.0.0.1:9108",
+			"path": "/metrics"
+		},
+		"sources": {
+			"host": {"enabled": false},
+			"module_reports": {
+				"enabled": false,
+				"socket_path": "./var/run/watchdog/module.sock",
+				"max_message_bytes": 4096,
+				"default_stale_after": "5s"
+			},
+			"systemd": {"enabled": false, "units": []},
+			"can": {"enabled": false, "backend": "socketcan", "interfaces": []},
+			"ethercat": {"enabled": false, "backend": "igh", "masters": []},
+			"network": {"enabled": false, "interfaces": []},
+			"power": {"enabled": false, "supplies": []},
+			"storage": {"enabled": false, "mounts": []},
+			"time_sync": {
+				"enabled": false,
+				"source_id": "system-clock",
+				"require_synchronized": true,
+				"warn_on_local_rtc": true,
+				"sync_grace_period": "10m"
+			}
+		},
+		"rules": {}
+	}`
+	if err := os.WriteFile(configPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if !cfg.Metrics.Enabled || cfg.Metrics.ListenAddress != "127.0.0.1:9108" || cfg.Metrics.Path != "/metrics" {
+		t.Fatalf("metrics = %+v", cfg.Metrics)
+	}
+}

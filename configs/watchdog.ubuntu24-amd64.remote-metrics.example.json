@@ -1,18 +1,18 @@
 {
   "poll_interval": "2s",
-  "incident_dir": "./var/incidents",
+  "incident_dir": "/var/lib/watchdog/incidents",
   "log_transitions_only": true,
   "metrics": {
     "enabled": true,
-    "listen_address": "127.0.0.1:9108",
+    "listen_address": "0.0.0.0:9108",
     "path": "/metrics"
   },
   "actions": {
     "unix_socket": {
-      "enabled": false,
-      "socket_path": "./var/run/watchdog/supervisor.sock",
+      "enabled": true,
+      "socket_path": "/run/watchdog/supervisor.sock",
       "send_resolved": true,
-      "spool_dir": "./var/spool/watchdog/actions",
+      "spool_dir": "/var/lib/watchdog/actions",
       "replay_batch_size": 64
     }
   },
@@ -22,89 +22,49 @@
     },
     "module_reports": {
       "enabled": true,
-      "socket_path": "./var/run/watchdog/module.sock",
+      "socket_path": "/run/watchdog/module.sock",
       "max_message_bytes": 4096,
       "default_stale_after": "5s"
     },
     "systemd": {
       "enabled": false,
-      "units": [
-        {
-          "name": "planner.service",
-          "source_id": "planner",
-          "require_main_pid": true
-        }
-      ]
+      "units": []
     },
     "can": {
       "enabled": false,
       "backend": "socketcan",
-      "interfaces": [
-        {
-          "name": "can0",
-          "source_id": "drive-can",
-          "expected_bitrate": 1000000,
-          "require_up": true,
-          "expected_nodes": [
-            {
-              "name": "left_drive",
-              "id": 1
-            },
-            {
-              "name": "right_drive",
-              "id": 2
-            }
-          ]
-        }
-      ]
+      "interfaces": []
     },
     "ethercat": {
       "enabled": false,
-      "backend": "igh",
-      "masters": [
-        {
-          "name": "master0",
-          "source_id": "actuators",
-          "expected_state": "op",
-          "expected_slaves": 12,
-          "require_link": true
-        }
-      ]
+      "backend": "soem",
+      "masters": []
     },
     "network": {
       "enabled": false,
-      "interfaces": [
-        {
-          "name": "eth0",
-          "source_id": "uplink",
-          "require_up": true,
-          "min_speed_mbps": 1000
-        }
-      ]
+      "interfaces": []
     },
     "power": {
       "enabled": false,
-      "supplies": [
-        {
-          "name": "BAT0",
-          "source_id": "main-battery",
-          "require_present": true,
-          "require_online": false
-        }
-      ]
+      "supplies": []
     },
     "storage": {
-      "enabled": false,
+      "enabled": true,
       "mounts": [
         {
           "path": "/",
           "source_id": "rootfs",
           "require_writable": true
+        },
+        {
+          "path": "/var/log",
+          "source_id": "var-log",
+          "require_writable": true
         }
       ]
     },
     "time_sync": {
-      "enabled": false,
+      "enabled": true,
       "source_id": "system-clock",
       "require_synchronized": true,
       "warn_on_local_rtc": true,

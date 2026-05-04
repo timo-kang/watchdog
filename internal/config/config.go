@@ -6,24 +6,28 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"watchdog/internal/metrics"
 )
 
 type Config struct {
 	PollInterval       time.Duration
 	IncidentDir        string
 	LogTransitionsOnly bool
+	Metrics            metrics.EndpointConfig
 	Actions            ActionsConfig
 	Sources            SourcesConfig
 	Rules              RulesConfig
 }
 
 type fileConfig struct {
-	PollInterval       string        `json:"poll_interval"`
-	IncidentDir        string        `json:"incident_dir"`
-	LogTransitionsOnly bool          `json:"log_transitions_only"`
-	Actions            ActionsConfig `json:"actions"`
-	Sources            fileSources   `json:"sources"`
-	Rules              RulesConfig   `json:"rules"`
+	PollInterval       string                 `json:"poll_interval"`
+	IncidentDir        string                 `json:"incident_dir"`
+	LogTransitionsOnly bool                   `json:"log_transitions_only"`
+	Metrics            metrics.EndpointConfig `json:"metrics"`
+	Actions            ActionsConfig          `json:"actions"`
+	Sources            fileSources            `json:"sources"`
+	Rules              RulesConfig            `json:"rules"`
 }
 
 type ActionsConfig struct {
@@ -255,6 +259,7 @@ func Load(path string) (Config, error) {
 		PollInterval:       "2s",
 		IncidentDir:        "./var/incidents",
 		LogTransitionsOnly: true,
+		Metrics:            metrics.DefaultEndpoint("127.0.0.1:9108"),
 		Actions: ActionsConfig{
 			UnixSocket: UnixSocketActionConfig{
 				Enabled:         false,
@@ -417,6 +422,10 @@ func Load(path string) (Config, error) {
 
 	if raw.IncidentDir == "" {
 		return Config{}, fmt.Errorf("incident_dir must not be empty")
+	}
+	raw.Metrics = metrics.NormalizeEndpoint(raw.Metrics, "127.0.0.1:9108")
+	if err := metrics.ValidateEndpoint("metrics", raw.Metrics); err != nil {
+		return Config{}, err
 	}
 	if strings.TrimSpace(raw.Sources.TimeSync.SyncGracePeriod) == "" {
 		raw.Sources.TimeSync.SyncGracePeriod = "10m"
@@ -594,6 +603,7 @@ func Load(path string) (Config, error) {
 		PollInterval:       interval,
 		IncidentDir:        raw.IncidentDir,
 		LogTransitionsOnly: raw.LogTransitionsOnly,
+		Metrics:            raw.Metrics,
 		Actions:            raw.Actions,
 		Sources:            sources,
 		Rules:              raw.Rules,

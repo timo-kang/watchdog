@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+# If Prometheus runs in Docker on the same Linux machine as watchdog,
+# `host.docker.internal` is available via docker-compose.server.yml.
+# Otherwise replace the targets below with the robot's reachable IP or hostname.
+
+scrape_configs:
+  - job_name: watchdog
+    static_configs:
+      - targets:
+          - robot-a.example.net:9108
+        labels:
+          robot: robot-a
+          service: watchdog
+
+  - job_name: watchdog-supervisor
+    static_configs:
+      - targets:
+          - robot-a.example.net:9109
+        labels:
+          robot: robot-a
+          service: watchdog-supervisor
