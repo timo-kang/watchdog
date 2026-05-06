@@ -174,6 +174,27 @@ Both processes can expose Prometheus-compatible metrics:
 
 Use loopback if Prometheus runs on the robot. Use a real interface bind such as `0.0.0.0:9108` only when a central Prometheus server is meant to scrape the robot directly.
 
+The normal real-robot flow is:
+
+```mermaid
+flowchart LR
+  subgraph Robot["Robot"]
+    Watchdog["watchdog\n:9108 /metrics"]
+    Supervisor["watchdog-supervisor\n:9109 /metrics"]
+  end
+
+  subgraph Server["Monitoring Server"]
+    Prometheus["Prometheus"]
+    Grafana["Grafana"]
+  end
+
+  Prometheus -->|"scrapes ROBOT_IP:9108"| Watchdog
+  Prometheus -->|"scrapes ROBOT_IP:9109"| Supervisor
+  Grafana -->|"queries"| Prometheus
+```
+
+Grafana reads Prometheus. Prometheus scrapes the robot.
+
 The repository includes a local observability stack for the Docker sim:
 
 - `deploy/observability/prometheus/prometheus.docker-sim.yml`
@@ -250,6 +271,8 @@ The common failure cases are:
 - robot metrics are still bound to `127.0.0.1`
 - firewall or network policy blocks `9108` or `9109`
 - Prometheus target entries do not match the robot address
+
+More diagrams and troubleshooting details are in `docs/observability.md`.
 
 ## Time Sync Behavior
 

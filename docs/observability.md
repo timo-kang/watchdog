@@ -11,6 +11,63 @@ The intent is:
 - Prometheus and Grafana become the observability plane
 - dashboard or network failures must not affect robot safety behavior
 
+## Topology
+
+There are two separate jobs:
+
+- the robot publishes metrics
+- the monitoring server collects and visualizes them
+
+```mermaid
+flowchart LR
+  subgraph Robot["Robot / Edge Node"]
+    Modules["Robot modules"]
+    Watchdog["watchdog\n:9108 /metrics"]
+    Supervisor["watchdog-supervisor\n:9109 /metrics"]
+    ModuleSock["/run/watchdog/module.sock"]
+    SupervisorSock["/run/watchdog/supervisor.sock"]
+    Incidents["/var/lib/watchdog/incidents"]
+
+    Modules --> ModuleSock --> Watchdog
+    Watchdog --> SupervisorSock --> Supervisor
+    Watchdog --> Incidents
+  end
+
+  subgraph Server["Monitoring Server / Laptop"]
+    Prometheus["Prometheus\nscrapes robot"]
+    Grafana["Grafana\nreads Prometheus"]
+  end
+
+  Prometheus -->|"http://ROBOT_IP:9108/metrics"| Watchdog
+  Prometheus -->|"http://ROBOT_IP:9109/metrics"| Supervisor
+  Grafana --> Prometheus
+```
+
+The most important point: Grafana does not talk to the robot directly. Grafana asks Prometheus, and Prometheus scrapes the robot.
+
+## Which File Does What
+
+```mermaid
+flowchart TD
+  RobotConfig["/etc/watchdog/watchdog.json\nrobot config"]
+  SupervisorConfig["/etc/watchdog/watchdog-supervisor.json\nrobot supervisor config"]
+  Compose["deploy/observability/docker-compose.server.yml\nstarts Prometheus + Grafana"]
+  PromConfig["deploy/observability/prometheus/prometheus.robot-server.example.yml\nPrometheus target list"]
+  Dashboard["deploy/observability/grafana/dashboards/watchdog-overview.json\nGrafana panels"]
+
+  RobotConfig -->|"enables :9108"| WatchdogEndpoint["watchdog /metrics"]
+  SupervisorConfig -->|"enables :9109"| SupervisorEndpoint["watchdog-supervisor /metrics"]
+  Compose --> Prometheus["Prometheus container"]
+  Compose --> Grafana["Grafana container"]
+  PromConfig -->|"robot IPs / hostnames"| Prometheus
+  Dashboard --> Grafana
+  Prometheus --> WatchdogEndpoint
+  Prometheus --> SupervisorEndpoint
+  Grafana --> Prometheus
+```
+
+Use `docker-compose.server.yml` to run the monitoring stack. Edit `prometheus.robot-server.example.yml` to tell Prometheus which robots to scrape.
+
 ## Metrics Endpoints
 
 Example watchdog config:
@@ -96,6 +153,25 @@ Local Docker sim scrape config:
 
 - `deploy/observability/prometheus/prometheus.docker-sim.yml`
 
+Docker sim topology:
+
+```mermaid
+flowchart LR
+  subgraph DockerNetwork["Docker Compose Network"]
+    Watchdog["watchdog container\nwatchdog:9108"]
+    Supervisor["watchdog-supervisor container\nwatchdog-supervisor:9109"]
+    Prometheus["prometheus container"]
+    Grafana["grafana container"]
+  end
+
+  Prometheus -->|"watchdog:9108"| Watchdog
+  Prometheus -->|"watchdog-supervisor:9109"| Supervisor
+  Grafana --> Prometheus
+  Browser["Browser"] -->|"localhost:3300"| Grafana
+```
+
+In this mode, targets like `watchdog:9108` work because Docker Compose provides service-name DNS inside the compose network. Those names do not work for a real robot outside that Docker network.
+
 Central scrape example:
 
 ```yaml
@@ -127,6 +203,47 @@ Those are for the real deployment shape:
 - watchdog runs on the robot
 - Prometheus and Grafana run on a monitoring server or laptop
 - Prometheus scrapes the robot over the network
+
+Real robot topology:
+
+```mermaid
+flowchart LR
+  subgraph RobotA["Robot A"]
+    AWatchdog["watchdog\n0.0.0.0:9108"]
+    ASupervisor["watchdog-supervisor\n0.0.0.0:9109"]
+  end
+
+  subgraph MonitoringServer["Monitoring Server"]
+    Prometheus["Prometheus"]
+    Grafana["Grafana"]
+  end
+
+  Prometheus -->|"robot-a:9108"| AWatchdog
+  Prometheus -->|"robot-a:9109"| ASupervisor
+  Grafana --> Prometheus
+```
+
+In this mode, the robot configs must bind metrics to a reachable address, for example `0.0.0.0:9108` and `0.0.0.0:9109`.
+
+Same-host Docker topology:
+
+```mermaid
+flowchart LR
+  subgraph Host["Linux Host"]
+    Watchdog["watchdog\nhost process :9108"]
+    Supervisor["watchdog-supervisor\nhost process :9109"]
+    subgraph Docker["Docker"]
+      Prometheus["Prometheus container"]
+      Grafana["Grafana container"]
+    end
+  end
+
+  Prometheus -->|"host.docker.internal:9108"| Watchdog
+  Prometheus -->|"host.docker.internal:9109"| Supervisor
+  Grafana --> Prometheus
+```
+
+In this mode, `127.0.0.1` inside the Prometheus container means the container itself. Use `host.docker.internal` to reach watchdog running on the host.
 
 ## Real Robot Scrape Checklist
 
