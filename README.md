@@ -344,6 +344,17 @@ C++ helper code is in:
 
 - `sdk/cpp/include/watchdog/client.hpp`
 - `sdk/cpp/examples/send_heartbeat.cpp`
+- `sdk/cpp/README.md`
+
+The SDK is header-only and can be consumed as a CMake package:
+
+```cmake
+find_package(watchdog_cpp CONFIG REQUIRED)
+target_link_libraries(robot_main PRIVATE watchdog::cpp)
+```
+
+Protocol v1 fixtures for external producers and action receivers are in
+`sdk/cpp/fixtures/`.
 
 SOEM helper code is in:
 

@@ -1,0 +1,15 @@
+{
+  "source_id": "robot-1.main",
+  "source_type": "module",
+  "severity": "ok",
+  "reason": "",
+  "stale_after_ms": 1500,
+  "metrics": {
+    "control_period_us": 551,
+    "imu_ready": 1
+  },
+  "labels": {
+    "process": "robot_control_node",
+    "surface": "robot_main"
+  }
+}

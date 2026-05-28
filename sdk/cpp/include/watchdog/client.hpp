@@ -51,6 +51,10 @@ class Client {
  public:
   explicit Client(std::string socket_path) : socket_path_(std::move(socket_path)) {}
 
+  static std::string Encode(const Report& report, std::string* error = nullptr) {
+    return EncodeReport(report, error);
+  }
+
   bool Send(const Report& report, std::string* error = nullptr) const {
     if (report.source_id.empty()) {
       AssignError(error, "source_id must not be empty");
@@ -65,8 +69,10 @@ class Client {
       return false;
     }
 
-    const std::string payload = EncodeReport(report, error);
-    if (error != nullptr && !error->empty()) {
+    std::string encode_error;
+    const std::string payload = EncodeReport(report, &encode_error);
+    if (!encode_error.empty()) {
+      AssignError(error, encode_error);
       return false;
     }
 

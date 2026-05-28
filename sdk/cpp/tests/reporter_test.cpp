@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <chrono>
 #include <iostream>
+#include <limits>
 #include <string>
 
 #include "watchdog/reporter.hpp"
@@ -75,6 +76,55 @@ bool TestBuildReportCanRepresentEtherCATSource() {
   }
   if (report.metrics.at("ethercat.working_counter") != 120) {
     std::cerr << "ethercat.working_counter metric mismatch\n";
+    return false;
+  }
+  return true;
+}
+
+bool TestEncodeReportIncludesProtocolV1Fields() {
+  watchdog::Report report;
+  report.source_id = "robot.main";
+  report.source_type = "module";
+  report.severity = watchdog::Severity::kOk;
+  report.reason = "";
+  report.stale_after_ms = 1500;
+  report.metrics["control_period_us"] = 551;
+  report.metrics["imu_ready"] = 1;
+  report.labels["process"] = "robot_control_node";
+  report.labels["surface"] = "robot_main";
+
+  std::string error;
+  const std::string payload = watchdog::Client::Encode(report, &error);
+  if (!error.empty()) {
+    std::cerr << "encode returned error: " << error << '\n';
+    return false;
+  }
+  const std::string want =
+      "{\"source_id\":\"robot.main\",\"source_type\":\"module\",\"severity\":\"ok\","
+      "\"reason\":\"\",\"stale_after_ms\":1500,\"metrics\":{\"control_period_us\":551,"
+      "\"imu_ready\":1},\"labels\":{\"process\":\"robot_control_node\","
+      "\"surface\":\"robot_main\"}}";
+  if (payload != want) {
+    std::cerr << "encoded payload mismatch\nwant: " << want << "\ngot:  " << payload << '\n';
+    return false;
+  }
+  return true;
+}
+
+bool TestEncodeReportRejectsNonFiniteMetrics() {
+  watchdog::Report report;
+  report.source_id = "robot.main";
+  report.severity = watchdog::Severity::kOk;
+  report.metrics["control_period_us"] = std::numeric_limits<double>::quiet_NaN();
+
+  std::string error;
+  const std::string payload = watchdog::Client::Encode(report, &error);
+  if (!payload.empty()) {
+    std::cerr << "non-finite metric produced payload: " << payload << '\n';
+    return false;
+  }
+  if (error != "metrics must be finite numbers") {
+    std::cerr << "non-finite metric error mismatch: " << error << '\n';
     return false;
   }
   return true;
@@ -168,6 +218,12 @@ int main() {
     return EXIT_FAILURE;
   }
   if (!TestBuildReportCanRepresentEtherCATSource()) {
+    return EXIT_FAILURE;
+  }
+  if (!TestEncodeReportIncludesProtocolV1Fields()) {
+    return EXIT_FAILURE;
+  }
+  if (!TestEncodeReportRejectsNonFiniteMetrics()) {
     return EXIT_FAILURE;
   }
   if (!TestHelpersIgnoreNullSample()) {

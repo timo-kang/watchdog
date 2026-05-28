@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "request_id": "20260528T071147.933911061Z-transition-degrade-robot_main",
+  "event": "transition",
+  "timestamp": "2026-05-28T07:11:47.933911061Z",
+  "hostname": "robot-1",
+  "overall": "stale",
+  "previous_overall": "ok",
+  "requested_action": "degrade",
+  "reason": "degrade requested for robot.main: module stale: last report 1.67s ago > stale_after 1.50s",
+  "incident_path": "/var/lib/watchdog/incidents/20260528T071147Z_stale.json",
+  "components": [
+    {
+      "component_id": "robot.main",
+      "severity": "stale",
+      "requested_action": "degrade",
+      "reason": "module stale: last report 1.67s ago > stale_after 1.50s",
+      "source_types": [
+        "module"
+      ]
+    }
+  ]
+}
