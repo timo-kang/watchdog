@@ -189,6 +189,7 @@ type fileSystemdSource struct {
 
 type RulesConfig struct {
 	Host     HostRules     `json:"host"`
+	Module   ModuleRules   `json:"module"`
 	Process  ProcessRules  `json:"process"`
 	CAN      CANRules      `json:"can"`
 	EtherCAT EtherCATRules `json:"ethercat"`
@@ -207,6 +208,11 @@ type HostRules struct {
 	MemAvailableCriticalMB float64 `json:"mem_available_critical_mb"`
 	LoadRatioWarn          float64 `json:"load_ratio_warn"`
 	LoadRatioCritical      float64 `json:"load_ratio_critical"`
+}
+
+type ModuleRules struct {
+	ControlPeriodWarnUS float64 `json:"control_period_warn_us"`
+	ControlPeriodFailUS float64 `json:"control_period_fail_us"`
 }
 
 type ProcessRules struct {
@@ -438,6 +444,17 @@ func Load(path string) (Config, error) {
 	}
 	if raw.Actions.UnixSocket.Enabled && raw.Actions.UnixSocket.ReplayBatchSize <= 0 {
 		return Config{}, fmt.Errorf("actions.unix_socket.replay_batch_size must be positive when enabled")
+	}
+	if raw.Rules.Module.ControlPeriodWarnUS < 0 {
+		return Config{}, fmt.Errorf("rules.module.control_period_warn_us must be >= 0")
+	}
+	if raw.Rules.Module.ControlPeriodFailUS < 0 {
+		return Config{}, fmt.Errorf("rules.module.control_period_fail_us must be >= 0")
+	}
+	if raw.Rules.Module.ControlPeriodWarnUS > 0 &&
+		raw.Rules.Module.ControlPeriodFailUS > 0 &&
+		raw.Rules.Module.ControlPeriodFailUS <= raw.Rules.Module.ControlPeriodWarnUS {
+		return Config{}, fmt.Errorf("rules.module.control_period_fail_us must be greater than control_period_warn_us")
 	}
 
 	moduleStaleAfter, err := time.ParseDuration(raw.Sources.ModuleReports.DefaultStaleAfter)

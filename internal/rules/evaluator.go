@@ -110,10 +110,32 @@ func (e *Evaluator) evaluateHost(status health.Status) health.Status {
 }
 
 func (e *Evaluator) evaluateModule(status health.Status, observation health.Observation) health.Status {
+	rules := e.cfg.Module
+	var reasons []string
+
+	update := func(next health.Severity, reason string) {
+		if health.CompareSeverity(next, status.Severity) > 0 {
+			status.Severity = next
+		}
+		reasons = append(reasons, reason)
+	}
+
 	if observation.ReportedSeverity != "" {
 		status.Severity = observation.ReportedSeverity
 	}
-	status.Reason = observation.ReportedReason
+	if observation.ReportedReason != "" {
+		reasons = append(reasons, observation.ReportedReason)
+	}
+
+	controlPeriodUS := metric(status.Metrics, "control_period_us")
+	switch {
+	case rules.ControlPeriodFailUS > 0 && controlPeriodUS >= rules.ControlPeriodFailUS:
+		update(health.SeverityFail, fmt.Sprintf("control period %.0fus >= fail %.0fus", controlPeriodUS, rules.ControlPeriodFailUS))
+	case rules.ControlPeriodWarnUS > 0 && controlPeriodUS >= rules.ControlPeriodWarnUS:
+		update(health.SeverityWarn, fmt.Sprintf("control period %.0fus >= warn %.0fus", controlPeriodUS, rules.ControlPeriodWarnUS))
+	}
+
+	status.Reason = strings.Join(reasons, "; ")
 	return status
 }
 

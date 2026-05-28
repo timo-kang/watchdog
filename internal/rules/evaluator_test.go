@@ -52,6 +52,60 @@ func TestEvaluateModuleMarksStale(t *testing.T) {
 	}
 }
 
+func TestEvaluateModuleWarnsOnControlPeriodThreshold(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Module: config.ModuleRules{
+			ControlPeriodWarnUS: 2000,
+			ControlPeriodFailUS: 5000,
+		},
+	})
+	observation := health.Observation{
+		SourceID:         "robot.main",
+		SourceType:       "module",
+		CollectedAt:      time.Now(),
+		ReportedSeverity: health.SeverityOK,
+		StaleAfter:       2 * time.Second,
+		Metrics: map[string]float64{
+			"control_period_us": 3200,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityWarn {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityWarn)
+	}
+	if !strings.Contains(status.Reason, "control period 3200us >= warn 2000us") {
+		t.Fatalf("reason = %q", status.Reason)
+	}
+}
+
+func TestEvaluateModuleFailsOnControlPeriodThreshold(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Module: config.ModuleRules{
+			ControlPeriodWarnUS: 2000,
+			ControlPeriodFailUS: 5000,
+		},
+	})
+	observation := health.Observation{
+		SourceID:         "robot.main",
+		SourceType:       "module",
+		CollectedAt:      time.Now(),
+		ReportedSeverity: health.SeverityOK,
+		StaleAfter:       2 * time.Second,
+		Metrics: map[string]float64{
+			"control_period_us": 6200,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+	if !strings.Contains(status.Reason, "control period 6200us >= fail 5000us") {
+		t.Fatalf("reason = %q", status.Reason)
+	}
+}
+
 func TestEvaluateReportedEtherCATMarksStale(t *testing.T) {
 	evaluator := New(config.RulesConfig{})
 	observation := health.Observation{

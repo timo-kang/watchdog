@@ -99,6 +99,49 @@ func TestBuildRequestWarnHostRequestsNotify(t *testing.T) {
 	}
 }
 
+func TestBuildRequestFailingModuleRequestsDegrade(t *testing.T) {
+	now := time.Now()
+	snapshot := health.Snapshot{
+		Hostname:    "robot-1",
+		CollectedAt: now,
+		Overall:     health.SeverityFail,
+		Statuses: []health.Status{
+			{
+				SourceID:   "robot.main",
+				SourceType: "module",
+				Severity:   health.SeverityFail,
+				Reason:     "control period 6200us >= fail 5000us",
+				ObservedAt: now,
+				Metrics: map[string]float64{
+					"control_period_us": 6200,
+				},
+			},
+		},
+		Components: []health.ComponentStatus{
+			{
+				ComponentID: "robot.main",
+				Severity:    health.SeverityFail,
+				Reason:      "module fail: control period 6200us >= fail 5000us",
+				ObservedAt:  now,
+				Sources: []health.ComponentSource{
+					{SourceType: "module", Severity: health.SeverityFail, Reason: "control period 6200us >= fail 5000us", ObservedAt: now},
+				},
+			},
+		},
+	}
+
+	request, ok := BuildRequest(nil, snapshot, "", true)
+	if !ok {
+		t.Fatal("expected request")
+	}
+	if request.RequestedAction != ActionDegrade {
+		t.Fatalf("requested_action = %s, want %s", request.RequestedAction, ActionDegrade)
+	}
+	if len(request.Components) != 1 || request.Components[0].RequestedAction != ActionDegrade {
+		t.Fatalf("component action = %#v", request.Components)
+	}
+}
+
 func TestBuildRequestResolvedSendsResolve(t *testing.T) {
 	now := time.Now()
 	previous := &health.Snapshot{

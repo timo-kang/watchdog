@@ -71,6 +71,10 @@
       "load_ratio_warn": 1.0,
       "load_ratio_critical": 1.5
     },
+    "module": {
+      "control_period_warn_us": 2000,
+      "control_period_fail_us": 5000
+    },
     "process": {
       "restart_warn": 1,
       "restart_fail": 3
