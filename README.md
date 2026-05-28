@@ -305,11 +305,16 @@ Use this intentionally:
 
 Local modules send one JSON datagram per heartbeat to `module.sock`.
 
+`source_id` is the stable component identity used for grouping health state,
+action latching, incident history, and metrics labels. Keep it stable for a
+given robot component, for example `<robot-id>.main` or `<robot-id>.ethercat`.
+
 Minimal example payload:
 
 ```json
 {
   "source_id": "planner",
+  "source_type": "module",
   "severity": "warn",
   "reason": "deadline miss",
   "stale_after_ms": 1500,
@@ -321,6 +326,11 @@ Minimal example payload:
   }
 }
 ```
+
+`source_type` is optional and defaults to `module`. Use a specific source type when
+a C++ process is reporting a subsystem that should use watchdog's built-in rules,
+for example `source_type: "ethercat"` with `ethercat.*` metrics. That lets the same
+ingest path drive watching, metrics reporting, and supervisor actions.
 
 C++ helper code is in:
 

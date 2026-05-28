@@ -35,6 +35,7 @@ type Collector struct {
 
 type reportState struct {
 	sourceID    string
+	sourceType  string
 	collectedAt time.Time
 	severity    health.Severity
 	reason      string
@@ -45,6 +46,7 @@ type reportState struct {
 
 type incomingReport struct {
 	SourceID     string             `json:"source_id"`
+	SourceType   string             `json:"source_type"`
 	Severity     string             `json:"severity"`
 	Reason       string             `json:"reason"`
 	ObservedAt   time.Time          `json:"observed_at"`
@@ -124,6 +126,7 @@ func (c *Collector) Collect(context.Context) ([]health.Observation, error) {
 	for key, value := range c.reports {
 		states[key] = reportState{
 			sourceID:    value.sourceID,
+			sourceType:  value.sourceType,
 			collectedAt: value.collectedAt,
 			severity:    value.severity,
 			reason:      value.reason,
@@ -157,7 +160,7 @@ func (c *Collector) Collect(context.Context) ([]health.Observation, error) {
 
 		observations = append(observations, health.Observation{
 			SourceID:         state.sourceID,
-			SourceType:       "module",
+			SourceType:       state.sourceType,
 			CollectedAt:      state.collectedAt,
 			Metrics:          metrics,
 			Labels:           cloneLabels(state.labels),
@@ -205,6 +208,10 @@ func decodeReport(data []byte, defaultStaleAfter time.Duration) (reportState, er
 	if incoming.SourceID == "" {
 		return reportState{}, fmt.Errorf("source_id is required")
 	}
+	sourceType := incoming.SourceType
+	if sourceType == "" {
+		sourceType = "module"
+	}
 
 	severity, err := health.ParseSeverity(incoming.Severity)
 	if err != nil {
@@ -223,6 +230,7 @@ func decodeReport(data []byte, defaultStaleAfter time.Duration) (reportState, er
 
 	return reportState{
 		sourceID:    incoming.SourceID,
+		sourceType:  sourceType,
 		collectedAt: collectedAt,
 		severity:    severity,
 		reason:      incoming.Reason,

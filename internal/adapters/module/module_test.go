@@ -93,3 +93,21 @@ func TestCollectorReceivesReports(t *testing.T) {
 
 	t.Fatal("timed out waiting for module observation")
 }
+
+func TestCollectorAcceptsReportedSourceType(t *testing.T) {
+	report, err := decodeReport([]byte(`{
+		"source_id": "robot.ethercat",
+		"source_type": "ethercat",
+		"severity": "ok",
+		"metrics": {
+			"ethercat.working_counter": 120,
+			"ethercat.working_counter_goal": 120
+		}
+	}`), time.Second)
+	if err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	if report.sourceType != "ethercat" {
+		t.Fatalf("source_type = %q, want ethercat", report.sourceType)
+	}
+}

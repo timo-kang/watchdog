@@ -29,6 +29,9 @@ func (e *Evaluator) Evaluate(observation health.Observation) health.Status {
 	if status.Metrics == nil {
 		status.Metrics = make(map[string]float64)
 	}
+	if e.applyStaleness(&status, observation) {
+		return status
+	}
 
 	switch observation.SourceType {
 	case "host":
@@ -107,26 +110,31 @@ func (e *Evaluator) evaluateHost(status health.Status) health.Status {
 }
 
 func (e *Evaluator) evaluateModule(status health.Status, observation health.Observation) health.Status {
-	age := time.Since(observation.CollectedAt)
-	status.Metrics["age.s"] = age.Seconds()
-	if observation.StaleAfter > 0 {
-		status.Metrics["stale_after.s"] = observation.StaleAfter.Seconds()
-	}
-
-	if observation.StaleAfter > 0 && age > observation.StaleAfter {
-		status.Severity = health.SeverityStale
-		status.Reason = fmt.Sprintf("last report %.2fs ago > stale_after %.2fs", age.Seconds(), observation.StaleAfter.Seconds())
-		if observation.ReportedSeverity != "" && observation.ReportedSeverity != health.SeverityOK {
-			status.Reason = fmt.Sprintf("%s; last reported %s: %s", status.Reason, observation.ReportedSeverity, observation.ReportedReason)
-		}
-		return status
-	}
-
 	if observation.ReportedSeverity != "" {
 		status.Severity = observation.ReportedSeverity
 	}
 	status.Reason = observation.ReportedReason
 	return status
+}
+
+func (e *Evaluator) applyStaleness(status *health.Status, observation health.Observation) bool {
+	if observation.StaleAfter <= 0 {
+		return false
+	}
+
+	age := time.Since(observation.CollectedAt)
+	status.Metrics["age.s"] = age.Seconds()
+	status.Metrics["stale_after.s"] = observation.StaleAfter.Seconds()
+	if age <= observation.StaleAfter {
+		return false
+	}
+
+	status.Severity = health.SeverityStale
+	status.Reason = fmt.Sprintf("last report %.2fs ago > stale_after %.2fs", age.Seconds(), observation.StaleAfter.Seconds())
+	if observation.ReportedSeverity != "" && observation.ReportedSeverity != health.SeverityOK {
+		status.Reason = fmt.Sprintf("%s; last reported %s: %s", status.Reason, observation.ReportedSeverity, observation.ReportedReason)
+	}
+	return true
 }
 
 func (e *Evaluator) evaluateProcess(status health.Status) health.Status {

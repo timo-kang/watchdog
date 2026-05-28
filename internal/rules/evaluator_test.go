@@ -52,6 +52,33 @@ func TestEvaluateModuleMarksStale(t *testing.T) {
 	}
 }
 
+func TestEvaluateReportedEtherCATMarksStale(t *testing.T) {
+	evaluator := New(config.RulesConfig{})
+	observation := health.Observation{
+		SourceID:         "robot.ethercat",
+		SourceType:       "ethercat",
+		CollectedAt:      time.Now().Add(-3 * time.Second),
+		ReportedSeverity: health.SeverityOK,
+		StaleAfter:       500 * time.Millisecond,
+		Metrics: map[string]float64{
+			"ethercat.working_counter":      120,
+			"ethercat.working_counter_goal": 120,
+		},
+		Labels: map[string]string{
+			"master_state":   "op",
+			"expected_state": "op",
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityStale {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityStale)
+	}
+	if got := status.Metrics["age.s"]; got <= 0 {
+		t.Fatalf("age.s = %f, want > 0", got)
+	}
+}
+
 func TestEvaluateProcessWarnsOnRestarts(t *testing.T) {
 	evaluator := New(config.RulesConfig{
 		Process: config.ProcessRules{

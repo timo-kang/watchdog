@@ -38,6 +38,7 @@ inline const char* SeverityToString(Severity severity) {
 
 struct Report {
   std::string source_id;
+  std::string source_type;
   Severity severity = Severity::kOk;
   std::string reason;
   std::int64_t stale_after_ms = 0;
@@ -121,6 +122,9 @@ class Client {
     out.precision(15);
     out << '{';
     out << "\"source_id\":\"" << EscapeJSON(report.source_id) << '"';
+    if (!report.source_type.empty()) {
+      out << ",\"source_type\":\"" << EscapeJSON(report.source_type) << '"';
+    }
     out << ",\"severity\":\"" << SeverityToString(report.severity) << '"';
     out << ",\"reason\":\"" << EscapeJSON(report.reason) << '"';
     if (report.stale_after_ms > 0) {
