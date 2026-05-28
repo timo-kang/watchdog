@@ -3,6 +3,7 @@ package rules
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"watchdog/internal/config"
@@ -10,11 +11,24 @@ import (
 )
 
 type Evaluator struct {
-	cfg config.RulesConfig
+	cfg          config.RulesConfig
+	mu           sync.Mutex
+	moduleTiming map[string]moduleTimingState
+}
+
+type moduleTimingState struct {
+	severity     health.Severity
+	warnCount    int
+	failCount    int
+	recoverCount int
+	observedAt   time.Time
 }
 
 func New(cfg config.RulesConfig) *Evaluator {
-	return &Evaluator{cfg: cfg}
+	return &Evaluator{
+		cfg:          cfg,
+		moduleTiming: make(map[string]moduleTimingState),
+	}
 }
 
 func (e *Evaluator) Evaluate(observation health.Observation) health.Status {
@@ -127,16 +141,163 @@ func (e *Evaluator) evaluateModule(status health.Status, observation health.Obse
 		reasons = append(reasons, observation.ReportedReason)
 	}
 
-	controlPeriodUS := metric(status.Metrics, "control_period_us")
-	switch {
-	case rules.ControlPeriodFailUS > 0 && controlPeriodUS >= rules.ControlPeriodFailUS:
-		update(health.SeverityFail, fmt.Sprintf("control period %.0fus >= fail %.0fus", controlPeriodUS, rules.ControlPeriodFailUS))
-	case rules.ControlPeriodWarnUS > 0 && controlPeriodUS >= rules.ControlPeriodWarnUS:
-		update(health.SeverityWarn, fmt.Sprintf("control period %.0fus >= warn %.0fus", controlPeriodUS, rules.ControlPeriodWarnUS))
+	if severity, reason := e.evaluateModuleControlPeriod(&status, rules); severity != health.SeverityOK {
+		update(severity, reason)
 	}
 
 	status.Reason = strings.Join(reasons, "; ")
 	return status
+}
+
+func (e *Evaluator) evaluateModuleControlPeriod(status *health.Status, rules config.ModuleRules) (health.Severity, string) {
+	if rules.ControlPeriodWarnUS <= 0 && rules.ControlPeriodFailUS <= 0 {
+		return health.SeverityOK, ""
+	}
+
+	controlPeriodUS, ok := status.Metrics["control_period_us"]
+	if !ok {
+		e.resetModuleTiming(status.SourceID)
+		return health.SeverityOK, ""
+	}
+
+	warnRequired := positiveOrDefault(rules.ControlPeriodWarnConsecutive, 3)
+	failRequired := positiveOrDefault(rules.ControlPeriodFailConsecutive, 5)
+	recoverRequired := positiveOrDefault(rules.ControlPeriodRecoverConsecutive, 3)
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	state := e.moduleTiming[status.SourceID]
+	if state.severity == "" {
+		state.severity = health.SeverityOK
+	}
+	if !state.observedAt.IsZero() && state.observedAt.Equal(status.ObservedAt) {
+		setModuleTimingMetrics(status, state)
+		if state.severity == health.SeverityOK {
+			return health.SeverityOK, ""
+		}
+		return state.severity, moduleTimingReason(controlPeriodUS, rules, state, warnRequired, failRequired, recoverRequired)
+	}
+	state.observedAt = status.ObservedAt
+
+	switch {
+	case rules.ControlPeriodFailUS > 0 && controlPeriodUS >= rules.ControlPeriodFailUS:
+		state.failCount++
+		state.warnCount++
+		state.recoverCount = 0
+		if state.failCount >= failRequired {
+			state.severity = health.SeverityFail
+		} else if rules.ControlPeriodWarnUS > 0 && state.warnCount >= warnRequired && state.severity != health.SeverityFail {
+			state.severity = health.SeverityWarn
+		}
+	case rules.ControlPeriodWarnUS > 0 && controlPeriodUS >= rules.ControlPeriodWarnUS:
+		state.warnCount++
+		state.failCount = 0
+		state.recoverCount = 0
+		if state.severity != health.SeverityFail && state.warnCount >= warnRequired {
+			state.severity = health.SeverityWarn
+		}
+	default:
+		state.warnCount = 0
+		state.failCount = 0
+		if state.severity == health.SeverityOK {
+			delete(e.moduleTiming, status.SourceID)
+			setModuleTimingMetrics(status, moduleTimingState{severity: health.SeverityOK})
+			return health.SeverityOK, ""
+		}
+		state.recoverCount++
+		if state.recoverCount >= recoverRequired {
+			delete(e.moduleTiming, status.SourceID)
+			setModuleTimingMetrics(status, moduleTimingState{severity: health.SeverityOK})
+			return health.SeverityOK, ""
+		}
+	}
+
+	e.moduleTiming[status.SourceID] = state
+	setModuleTimingMetrics(status, state)
+	return state.severity, moduleTimingReason(controlPeriodUS, rules, state, warnRequired, failRequired, recoverRequired)
+}
+
+func (e *Evaluator) resetModuleTiming(sourceID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.moduleTiming, sourceID)
+}
+
+func setModuleTimingMetrics(status *health.Status, state moduleTimingState) {
+	status.Metrics["control_period_warn_count"] = float64(state.warnCount)
+	status.Metrics["control_period_fail_count"] = float64(state.failCount)
+	status.Metrics["control_period_recover_count"] = float64(state.recoverCount)
+	status.Metrics["control_period_timing_state"] = severityMetric(state.severity)
+}
+
+func moduleTimingReason(controlPeriodUS float64, rules config.ModuleRules, state moduleTimingState, warnRequired, failRequired, recoverRequired int) string {
+	if state.recoverCount > 0 {
+		limitName := "warn"
+		limit := rules.ControlPeriodWarnUS
+		if limit <= 0 {
+			limitName = "fail"
+			limit = rules.ControlPeriodFailUS
+		}
+		return fmt.Sprintf(
+			"control period %.0fus below %s %.0fus; recovering %d/%d after %s",
+			controlPeriodUS,
+			limitName,
+			limit,
+			state.recoverCount,
+			recoverRequired,
+			state.severity,
+		)
+	}
+
+	if state.severity == health.SeverityFail {
+		if rules.ControlPeriodFailUS > 0 && controlPeriodUS >= rules.ControlPeriodFailUS {
+			return fmt.Sprintf(
+				"control period %.0fus >= fail %.0fus (%d/%d consecutive)",
+				controlPeriodUS,
+				rules.ControlPeriodFailUS,
+				state.failCount,
+				failRequired,
+			)
+		}
+		if rules.ControlPeriodWarnUS > 0 && controlPeriodUS >= rules.ControlPeriodWarnUS {
+			return fmt.Sprintf(
+				"control period %.0fus remains above warn %.0fus after fail",
+				controlPeriodUS,
+				rules.ControlPeriodWarnUS,
+			)
+		}
+	}
+	if state.severity == health.SeverityWarn {
+		return fmt.Sprintf(
+			"control period %.0fus >= warn %.0fus (%d/%d consecutive)",
+			controlPeriodUS,
+			rules.ControlPeriodWarnUS,
+			state.warnCount,
+			warnRequired,
+		)
+	}
+	return ""
+}
+
+func positiveOrDefault(value, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
+}
+
+func severityMetric(severity health.Severity) float64 {
+	switch severity {
+	case health.SeverityWarn:
+		return 1
+	case health.SeverityFail:
+		return 2
+	case health.SeverityStale:
+		return 3
+	default:
+		return 0
+	}
 }
 
 func (e *Evaluator) applyStaleness(status *health.Status, observation health.Observation) bool {
@@ -155,6 +316,9 @@ func (e *Evaluator) applyStaleness(status *health.Status, observation health.Obs
 	status.Reason = fmt.Sprintf("last report %.2fs ago > stale_after %.2fs", age.Seconds(), observation.StaleAfter.Seconds())
 	if observation.ReportedSeverity != "" && observation.ReportedSeverity != health.SeverityOK {
 		status.Reason = fmt.Sprintf("%s; last reported %s: %s", status.Reason, observation.ReportedSeverity, observation.ReportedReason)
+	}
+	if observation.SourceType == "module" {
+		e.resetModuleTiming(observation.SourceID)
 	}
 	return true
 }

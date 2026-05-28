@@ -506,6 +506,15 @@ func TestLoadParsesModuleRules(t *testing.T) {
 	if cfg.Rules.Module.ControlPeriodFailUS != 5000 {
 		t.Fatalf("control_period_fail_us = %f, want 5000", cfg.Rules.Module.ControlPeriodFailUS)
 	}
+	if cfg.Rules.Module.ControlPeriodWarnConsecutive != 3 {
+		t.Fatalf("control_period_warn_consecutive = %d, want 3", cfg.Rules.Module.ControlPeriodWarnConsecutive)
+	}
+	if cfg.Rules.Module.ControlPeriodFailConsecutive != 5 {
+		t.Fatalf("control_period_fail_consecutive = %d, want 5", cfg.Rules.Module.ControlPeriodFailConsecutive)
+	}
+	if cfg.Rules.Module.ControlPeriodRecoverConsecutive != 3 {
+		t.Fatalf("control_period_recover_consecutive = %d, want 3", cfg.Rules.Module.ControlPeriodRecoverConsecutive)
+	}
 }
 
 func TestLoadRejectsInvalidModuleRuleOrder(t *testing.T) {

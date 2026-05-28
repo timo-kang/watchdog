@@ -335,7 +335,9 @@ ingest path drive watching, metrics reporting, and supervisor actions.
 Module reports can also be evaluated by configured thresholds. For example,
 `rules.module.control_period_warn_us` and `rules.module.control_period_fail_us`
 promote a module to `warn` or `fail` when it reports `control_period_us` above
-those limits. A `fail` module maps to a supervisor `degrade` request through the
+those limits for enough consecutive watchdog polls. The default consecutive
+counts are `warn=3`, `fail=5`, and `recover=3` when timing thresholds are
+configured. A `fail` module maps to a supervisor `degrade` request through the
 default action recommendation path.
 
 C++ helper code is in:

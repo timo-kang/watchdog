@@ -211,8 +211,11 @@ type HostRules struct {
 }
 
 type ModuleRules struct {
-	ControlPeriodWarnUS float64 `json:"control_period_warn_us"`
-	ControlPeriodFailUS float64 `json:"control_period_fail_us"`
+	ControlPeriodWarnUS             float64 `json:"control_period_warn_us"`
+	ControlPeriodFailUS             float64 `json:"control_period_fail_us"`
+	ControlPeriodWarnConsecutive    int     `json:"control_period_warn_consecutive"`
+	ControlPeriodFailConsecutive    int     `json:"control_period_fail_consecutive"`
+	ControlPeriodRecoverConsecutive int     `json:"control_period_recover_consecutive"`
 }
 
 type ProcessRules struct {
@@ -451,11 +454,21 @@ func Load(path string) (Config, error) {
 	if raw.Rules.Module.ControlPeriodFailUS < 0 {
 		return Config{}, fmt.Errorf("rules.module.control_period_fail_us must be >= 0")
 	}
+	if raw.Rules.Module.ControlPeriodWarnConsecutive < 0 {
+		return Config{}, fmt.Errorf("rules.module.control_period_warn_consecutive must be >= 0")
+	}
+	if raw.Rules.Module.ControlPeriodFailConsecutive < 0 {
+		return Config{}, fmt.Errorf("rules.module.control_period_fail_consecutive must be >= 0")
+	}
+	if raw.Rules.Module.ControlPeriodRecoverConsecutive < 0 {
+		return Config{}, fmt.Errorf("rules.module.control_period_recover_consecutive must be >= 0")
+	}
 	if raw.Rules.Module.ControlPeriodWarnUS > 0 &&
 		raw.Rules.Module.ControlPeriodFailUS > 0 &&
 		raw.Rules.Module.ControlPeriodFailUS <= raw.Rules.Module.ControlPeriodWarnUS {
 		return Config{}, fmt.Errorf("rules.module.control_period_fail_us must be greater than control_period_warn_us")
 	}
+	normalizeModuleRules(&raw.Rules.Module)
 
 	moduleStaleAfter, err := time.ParseDuration(raw.Sources.ModuleReports.DefaultStaleAfter)
 	if err != nil {
@@ -643,5 +656,21 @@ func backendRequiresProbeCommand(backend string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func normalizeModuleRules(rules *ModuleRules) {
+	if rules == nil {
+		return
+	}
+	if rules.ControlPeriodWarnUS > 0 && rules.ControlPeriodWarnConsecutive == 0 {
+		rules.ControlPeriodWarnConsecutive = 3
+	}
+	if rules.ControlPeriodFailUS > 0 && rules.ControlPeriodFailConsecutive == 0 {
+		rules.ControlPeriodFailConsecutive = 5
+	}
+	if (rules.ControlPeriodWarnUS > 0 || rules.ControlPeriodFailUS > 0) &&
+		rules.ControlPeriodRecoverConsecutive == 0 {
+		rules.ControlPeriodRecoverConsecutive = 3
 	}
 }

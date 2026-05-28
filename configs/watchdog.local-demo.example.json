@@ -73,7 +73,10 @@
     },
     "module": {
       "control_period_warn_us": 2000,
-      "control_period_fail_us": 5000
+      "control_period_fail_us": 5000,
+      "control_period_warn_consecutive": 3,
+      "control_period_fail_consecutive": 5,
+      "control_period_recover_consecutive": 3
     },
     "process": {
       "restart_warn": 1,

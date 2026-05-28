@@ -52,11 +52,13 @@ func TestEvaluateModuleMarksStale(t *testing.T) {
 	}
 }
 
-func TestEvaluateModuleWarnsOnControlPeriodThreshold(t *testing.T) {
+func TestEvaluateModuleWarnsAfterConsecutiveControlPeriodThreshold(t *testing.T) {
 	evaluator := New(config.RulesConfig{
 		Module: config.ModuleRules{
-			ControlPeriodWarnUS: 2000,
-			ControlPeriodFailUS: 5000,
+			ControlPeriodWarnUS:          2000,
+			ControlPeriodFailUS:          5000,
+			ControlPeriodWarnConsecutive: 3,
+			ControlPeriodFailConsecutive: 5,
 		},
 	})
 	observation := health.Observation{
@@ -70,20 +72,35 @@ func TestEvaluateModuleWarnsOnControlPeriodThreshold(t *testing.T) {
 		},
 	}
 
+	baseTime := time.Now()
+	for i := 1; i < 3; i++ {
+		observation.CollectedAt = baseTime.Add(time.Duration(i) * time.Millisecond)
+		status := evaluator.Evaluate(observation)
+		if status.Severity != health.SeverityOK {
+			t.Fatalf("sample %d severity = %s, want %s", i, status.Severity, health.SeverityOK)
+		}
+	}
+
+	observation.CollectedAt = baseTime.Add(3 * time.Millisecond)
 	status := evaluator.Evaluate(observation)
 	if status.Severity != health.SeverityWarn {
 		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityWarn)
 	}
-	if !strings.Contains(status.Reason, "control period 3200us >= warn 2000us") {
+	if !strings.Contains(status.Reason, "control period 3200us >= warn 2000us (3/3 consecutive)") {
 		t.Fatalf("reason = %q", status.Reason)
+	}
+	if got := status.Metrics["control_period_warn_count"]; got != 3 {
+		t.Fatalf("control_period_warn_count = %f, want 3", got)
 	}
 }
 
-func TestEvaluateModuleFailsOnControlPeriodThreshold(t *testing.T) {
+func TestEvaluateModuleDoesNotCountSameControlPeriodSampleTwice(t *testing.T) {
 	evaluator := New(config.RulesConfig{
 		Module: config.ModuleRules{
-			ControlPeriodWarnUS: 2000,
-			ControlPeriodFailUS: 5000,
+			ControlPeriodWarnUS:          2000,
+			ControlPeriodFailUS:          5000,
+			ControlPeriodWarnConsecutive: 3,
+			ControlPeriodFailConsecutive: 5,
 		},
 	})
 	observation := health.Observation{
@@ -97,12 +114,71 @@ func TestEvaluateModuleFailsOnControlPeriodThreshold(t *testing.T) {
 		},
 	}
 
+	for i := 0; i < 5; i++ {
+		status := evaluator.Evaluate(observation)
+		if status.Severity != health.SeverityOK {
+			t.Fatalf("repeat %d severity = %s, want %s", i+1, status.Severity, health.SeverityOK)
+		}
+		if got := status.Metrics["control_period_fail_count"]; got != 1 {
+			t.Fatalf("repeat %d control_period_fail_count = %f, want 1", i+1, got)
+		}
+	}
+}
+
+func TestEvaluateModuleFailsAfterConsecutiveControlPeriodThreshold(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Module: config.ModuleRules{
+			ControlPeriodWarnUS:             2000,
+			ControlPeriodFailUS:             5000,
+			ControlPeriodWarnConsecutive:    3,
+			ControlPeriodFailConsecutive:    5,
+			ControlPeriodRecoverConsecutive: 3,
+		},
+	})
+	observation := health.Observation{
+		SourceID:         "robot.main",
+		SourceType:       "module",
+		CollectedAt:      time.Now(),
+		ReportedSeverity: health.SeverityOK,
+		StaleAfter:       2 * time.Second,
+		Metrics: map[string]float64{
+			"control_period_us": 6200,
+		},
+	}
+
+	baseTime := time.Now()
+	for i := 1; i < 5; i++ {
+		observation.CollectedAt = baseTime.Add(time.Duration(i) * time.Millisecond)
+		status := evaluator.Evaluate(observation)
+		if i < 3 && status.Severity != health.SeverityOK {
+			t.Fatalf("sample %d severity = %s, want %s", i, status.Severity, health.SeverityOK)
+		}
+		if i >= 3 && status.Severity != health.SeverityWarn {
+			t.Fatalf("sample %d severity = %s, want %s", i, status.Severity, health.SeverityWarn)
+		}
+	}
+
+	observation.CollectedAt = baseTime.Add(5 * time.Millisecond)
 	status := evaluator.Evaluate(observation)
 	if status.Severity != health.SeverityFail {
 		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
 	}
-	if !strings.Contains(status.Reason, "control period 6200us >= fail 5000us") {
+	if !strings.Contains(status.Reason, "control period 6200us >= fail 5000us (5/5 consecutive)") {
 		t.Fatalf("reason = %q", status.Reason)
+	}
+
+	observation.Metrics["control_period_us"] = 500
+	for i := 1; i < 3; i++ {
+		observation.CollectedAt = baseTime.Add(time.Duration(5+i) * time.Millisecond)
+		status := evaluator.Evaluate(observation)
+		if status.Severity != health.SeverityFail {
+			t.Fatalf("recovery sample %d severity = %s, want %s", i, status.Severity, health.SeverityFail)
+		}
+	}
+	observation.CollectedAt = baseTime.Add(8 * time.Millisecond)
+	status = evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityOK {
+		t.Fatalf("recovered severity = %s, want %s", status.Severity, health.SeverityOK)
 	}
 }
 
