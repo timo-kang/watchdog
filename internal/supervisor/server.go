@@ -26,11 +26,12 @@ type Server struct {
 }
 
 type AuditRecord struct {
-	ReceivedAt time.Time       `json:"received_at"`
-	Request    actions.Request `json:"request"`
-	Decision   ApplyResult     `json:"decision"`
-	Hook       *HookResult     `json:"hook,omitempty"`
-	Duplicate  bool            `json:"duplicate,omitempty"`
+	ReceivedAt time.Time        `json:"received_at"`
+	Request    actions.Request  `json:"request"`
+	Decision   ApplyResult      `json:"decision"`
+	ShadowFSM  *ShadowFSMResult `json:"shadow_fsm,omitempty"`
+	Hook       *HookResult      `json:"hook,omitempty"`
+	Duplicate  bool             `json:"duplicate,omitempty"`
 }
 
 type HookResult struct {
@@ -64,6 +65,16 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.cfg.LatestPath != "" {
 		if err := os.MkdirAll(filepath.Dir(s.cfg.LatestPath), 0o755); err != nil {
 			return fmt.Errorf("create latest dir: %w", err)
+		}
+	}
+	if s.cfg.ShadowFSM.Enabled {
+		if err := os.MkdirAll(s.cfg.ShadowFSM.RequestDir, 0o755); err != nil {
+			return fmt.Errorf("create shadow fsm request dir: %w", err)
+		}
+		if s.cfg.ShadowFSM.LatestPath != "" {
+			if err := os.MkdirAll(filepath.Dir(s.cfg.ShadowFSM.LatestPath), 0o755); err != nil {
+				return fmt.Errorf("create shadow fsm latest dir: %w", err)
+			}
 		}
 	}
 	if err := ensureStateDir(s.cfg.StatePath); err != nil {
@@ -156,6 +167,7 @@ func (s *Server) handlePayload(ctx context.Context, payload []byte) error {
 		s.observer.ObserveRequest(request, "applied")
 	}
 
+	shadowResult := s.writeShadowFSMRequest(request, decision)
 	result, err := s.dispatchHook(ctx, request, payload, decision)
 	if s.observer != nil {
 		s.observer.ObserveHook(supervisorHookView(decision, result))
@@ -164,6 +176,7 @@ func (s *Server) handlePayload(ctx context.Context, payload []byte) error {
 		ReceivedAt: time.Now().UTC(),
 		Request:    request,
 		Decision:   decision,
+		ShadowFSM:  shadowResult,
 		Hook:       result,
 	}
 	if writeErr := writeJSONFile(recordPath, record); writeErr != nil {

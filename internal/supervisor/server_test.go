@@ -119,6 +119,115 @@ func TestServerProcessesAndDedupesRequests(t *testing.T) {
 	}
 }
 
+func TestServerWritesShadowFSMRequestWithoutCommandHook(t *testing.T) {
+	tempDir := t.TempDir()
+	socketPath := filepath.Join(tempDir, "supervisor.sock")
+	auditDir := filepath.Join(tempDir, "audit")
+	latestPath := filepath.Join(tempDir, "latest.json")
+	statePath := filepath.Join(tempDir, "current_state.json")
+	shadowDir := filepath.Join(tempDir, "shadow-fsm", "requests")
+	shadowLatest := filepath.Join(tempDir, "shadow-fsm", "latest.json")
+
+	cfg := Config{
+		SocketPath:  socketPath,
+		AuditDir:    auditDir,
+		LatestPath:  latestPath,
+		StatePath:   statePath,
+		HookTimeout: 2 * time.Second,
+		ShadowFSM: ShadowFSMConfig{
+			Enabled:    true,
+			RequestDir: shadowDir,
+			LatestPath: shadowLatest,
+		},
+		Cooldowns: CooldownConfig{
+			SafeStop: time.Hour,
+		},
+	}
+
+	server := NewServer(log.New(io.Discard, "", 0), cfg, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.Run(ctx)
+	}()
+	waitForPath(t, socketPath)
+
+	request := actions.Request{
+		SchemaVersion:   1,
+		RequestID:       "req-safe-stop",
+		Event:           actions.EventTransition,
+		Timestamp:       time.Now().UTC(),
+		Hostname:        "robot-1",
+		Overall:         health.SeverityFail,
+		RequestedAction: actions.ActionSafeStop,
+		Reason:          "critical EtherCAT slave lost",
+		IncidentPath:    "/tmp/incident.json",
+		Components: []actions.ComponentRequest{
+			{
+				ComponentID:     "actuators",
+				Severity:        health.SeverityFail,
+				RequestedAction: actions.ActionSafeStop,
+				Reason:          "critical lost slaves 1 > 0",
+				SourceTypes:     []string{"ethercat"},
+			},
+		},
+	}
+
+	sendRequest(t, socketPath, request)
+	shadowPath := filepath.Join(shadowDir, "req-safe-stop.json")
+	waitForPath(t, shadowPath)
+	waitForPath(t, shadowLatest)
+	waitForPath(t, filepath.Join(auditDir, "req-safe-stop.json"))
+
+	var robotRequest RobotFSMRequest
+	shadowContent, err := os.ReadFile(shadowPath)
+	if err != nil {
+		t.Fatalf("read shadow request: %v", err)
+	}
+	if err := json.Unmarshal(shadowContent, &robotRequest); err != nil {
+		t.Fatalf("decode shadow request: %v", err)
+	}
+	if robotRequest.Mode != "shadow" {
+		t.Fatalf("mode = %q, want shadow", robotRequest.Mode)
+	}
+	if robotRequest.SuggestedCommand != "request_safe_stop" {
+		t.Fatalf("suggested_command = %q, want request_safe_stop", robotRequest.SuggestedCommand)
+	}
+	if robotRequest.WatchdogRequestID != "req-safe-stop" {
+		t.Fatalf("watchdog_request_id = %q", robotRequest.WatchdogRequestID)
+	}
+	if len(robotRequest.Components) != 1 || robotRequest.Components[0].ComponentID != "actuators" {
+		t.Fatalf("components = %+v", robotRequest.Components)
+	}
+
+	var record AuditRecord
+	auditContent, err := os.ReadFile(filepath.Join(auditDir, "req-safe-stop.json"))
+	if err != nil {
+		t.Fatalf("read audit record: %v", err)
+	}
+	if err := json.Unmarshal(auditContent, &record); err != nil {
+		t.Fatalf("decode audit record: %v", err)
+	}
+	if record.ShadowFSM == nil || !record.ShadowFSM.Written || record.ShadowFSM.Path != shadowPath {
+		t.Fatalf("shadow_fsm result = %+v", record.ShadowFSM)
+	}
+	if record.Hook == nil || record.Hook.Executed {
+		t.Fatalf("hook result = %+v, want non-executed empty hook", record.Hook)
+	}
+
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("server run: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for server shutdown")
+	}
+}
+
 func TestRemoveStaleSocketRemovesClosedSocket(t *testing.T) {
 	tempDir := t.TempDir()
 	socketPath := filepath.Join(tempDir, "supervisor.sock")

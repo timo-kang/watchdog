@@ -182,9 +182,43 @@ A minimal first receiver can:
 
 This repository now includes that companion daemon as `cmd/watchdog-supervisor`.
 
+## Shadow FSM Mode
+
+Before connecting hooks to a real robot FSM, enable `shadow_fsm` in the
+supervisor config. In this mode the supervisor writes the robot-FSM request it
+would have sent, but it does not command the robot.
+
+Example:
+
+```json
+{
+  "shadow_fsm": {
+    "enabled": true,
+    "request_dir": "/var/lib/watchdog/supervisor/shadow_fsm/requests",
+    "latest_path": "/var/lib/watchdog/supervisor/shadow_fsm/latest.json"
+  }
+}
+```
+
+The shadow payload has schema version `1` and includes:
+
+- `mode: "shadow"`
+- original watchdog `request_id`
+- requested action and suggested FSM command
+- affected components or resolved components
+- incident path and reason
+
+Suggested command mapping:
+
+- `notify` -> `notify_operator`
+- `degrade` -> `enter_degraded_mode`
+- `safe_stop` -> `request_safe_stop`
+- `resolve` -> `clear_watchdog_condition`
+
 That gives you a clean stepping stone:
 
 - first: watchdog -> local supervisor -> hook/script/service
+- shadow: watchdog -> local supervisor -> FSM request JSON
 - later: replace the hook target with a real robot supervisor or FSM
 
 The interface stays stable while the robot-side policy implementation grows up around it.

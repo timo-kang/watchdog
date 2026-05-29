@@ -15,9 +15,16 @@ type Config struct {
 	LatestPath  string
 	StatePath   string
 	Metrics     metrics.EndpointConfig
+	ShadowFSM   ShadowFSMConfig
 	HookTimeout time.Duration
 	Cooldowns   CooldownConfig
 	Hooks       HookConfig
+}
+
+type ShadowFSMConfig struct {
+	Enabled    bool   `json:"enabled"`
+	RequestDir string `json:"request_dir"`
+	LatestPath string `json:"latest_path"`
 }
 
 type CooldownConfig struct {
@@ -40,6 +47,7 @@ type fileConfig struct {
 	LatestPath  string                 `json:"latest_path"`
 	StatePath   string                 `json:"state_path"`
 	Metrics     metrics.EndpointConfig `json:"metrics"`
+	ShadowFSM   ShadowFSMConfig        `json:"shadow_fsm"`
 	HookTimeout string                 `json:"hook_timeout"`
 	Cooldowns   fileCooldownConfig     `json:"cooldowns"`
 	Hooks       HookConfig             `json:"hooks"`
@@ -54,11 +62,16 @@ type fileCooldownConfig struct {
 
 func LoadConfig(path string) (Config, error) {
 	raw := fileConfig{
-		SocketPath:  "./var/run/watchdog/supervisor.sock",
-		AuditDir:    "./var/lib/watchdog/supervisor/requests",
-		LatestPath:  "./var/lib/watchdog/supervisor/latest.json",
-		StatePath:   "./var/lib/watchdog/supervisor/current_state.json",
-		Metrics:     metrics.DefaultEndpoint("127.0.0.1:9109"),
+		SocketPath: "./var/run/watchdog/supervisor.sock",
+		AuditDir:   "./var/lib/watchdog/supervisor/requests",
+		LatestPath: "./var/lib/watchdog/supervisor/latest.json",
+		StatePath:  "./var/lib/watchdog/supervisor/current_state.json",
+		Metrics:    metrics.DefaultEndpoint("127.0.0.1:9109"),
+		ShadowFSM: ShadowFSMConfig{
+			Enabled:    false,
+			RequestDir: "./var/lib/watchdog/supervisor/shadow_fsm/requests",
+			LatestPath: "./var/lib/watchdog/supervisor/shadow_fsm/latest.json",
+		},
 		HookTimeout: "5s",
 		Cooldowns: fileCooldownConfig{
 			Notify:   "30s",
@@ -89,6 +102,9 @@ func LoadConfig(path string) (Config, error) {
 	if err := metrics.ValidateEndpoint("metrics", raw.Metrics); err != nil {
 		return Config{}, err
 	}
+	if raw.ShadowFSM.Enabled && raw.ShadowFSM.RequestDir == "" {
+		return Config{}, fmt.Errorf("shadow_fsm.request_dir must not be empty when enabled")
+	}
 
 	timeout, err := time.ParseDuration(raw.HookTimeout)
 	if err != nil {
@@ -109,6 +125,7 @@ func LoadConfig(path string) (Config, error) {
 		LatestPath:  raw.LatestPath,
 		StatePath:   raw.StatePath,
 		Metrics:     raw.Metrics,
+		ShadowFSM:   raw.ShadowFSM,
 		HookTimeout: timeout,
 		Cooldowns:   cooldowns,
 		Hooks:       raw.Hooks,

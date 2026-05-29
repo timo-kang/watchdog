@@ -8,6 +8,11 @@
     "listen_address": "0.0.0.0:9109",
     "path": "/metrics"
   },
+  "shadow_fsm": {
+    "enabled": true,
+    "request_dir": "/var/lib/watchdog/supervisor/shadow_fsm/requests",
+    "latest_path": "/var/lib/watchdog/supervisor/shadow_fsm/latest.json"
+  },
   "hook_timeout": "5s",
   "cooldowns": {
     "notify": "30s",
