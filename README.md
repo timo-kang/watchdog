@@ -28,7 +28,8 @@ Current local action policy:
 
 - `warn` -> `notify`
 - `fail` or `stale` -> `degrade`
-- EtherCAT lost slave or required link down -> `safe_stop`
+- EtherCAT required link down or critical slave fault -> `safe_stop`
+- aggregate EtherCAT lost slave without topology -> `safe_stop`
 - recovery -> `resolve`
 
 Prometheus-compatible `/metrics` endpoints are now built into both `watchdog` and `watchdog-supervisor`, so the same surface can feed Prometheus, Grafana, or Datadog OpenMetrics collection.
@@ -100,6 +101,7 @@ Edit these first:
 - `power.supplies`
 - `can.interfaces`
 - `ethercat.masters`
+- `ethercat.masters[].slaves[]` with `criticality: critical|important|optional`
 - `sources.time_sync.require_synchronized`
 - `sources.time_sync.sync_grace_period`
 

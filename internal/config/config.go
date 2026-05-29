@@ -103,12 +103,20 @@ type EtherCATSourceConfig struct {
 }
 
 type EtherCATMasterConfig struct {
-	Name           string   `json:"name"`
-	SourceID       string   `json:"source_id"`
-	ExpectedState  string   `json:"expected_state"`
-	ExpectedSlaves int      `json:"expected_slaves"`
-	RequireLink    bool     `json:"require_link"`
-	ProbeCommand   []string `json:"probe_command"`
+	Name           string                `json:"name"`
+	SourceID       string                `json:"source_id"`
+	ExpectedState  string                `json:"expected_state"`
+	ExpectedSlaves int                   `json:"expected_slaves"`
+	RequireLink    bool                  `json:"require_link"`
+	ProbeCommand   []string              `json:"probe_command"`
+	Slaves         []EtherCATSlaveConfig `json:"slaves"`
+}
+
+type EtherCATSlaveConfig struct {
+	Position      int    `json:"position"`
+	Name          string `json:"name"`
+	Criticality   string `json:"criticality"`
+	ExpectedState string `json:"expected_state"`
 }
 
 type NetworkSourceConfig struct {
@@ -587,6 +595,26 @@ func Load(path string) (Config, error) {
 		}
 		if backendRequiresProbeCommand(sources.EtherCAT.Backend) && len(master.ProbeCommand) == 0 {
 			return Config{}, fmt.Errorf("sources.ethercat.masters[%d].probe_command must not be empty for backend %q", i, sources.EtherCAT.Backend)
+		}
+		for j, slave := range master.Slaves {
+			if slave.Position < 0 {
+				return Config{}, fmt.Errorf("sources.ethercat.masters[%d].slaves[%d].position must be >= 0", i, j)
+			}
+			if strings.TrimSpace(slave.Name) == "" {
+				return Config{}, fmt.Errorf("sources.ethercat.masters[%d].slaves[%d].name must not be empty", i, j)
+			}
+			criticality := strings.ToLower(strings.TrimSpace(slave.Criticality))
+			switch criticality {
+			case "":
+				sources.EtherCAT.Masters[i].Slaves[j].Criticality = "important"
+			case "critical", "important", "optional":
+				sources.EtherCAT.Masters[i].Slaves[j].Criticality = criticality
+			default:
+				return Config{}, fmt.Errorf("sources.ethercat.masters[%d].slaves[%d].criticality must be critical, important, or optional", i, j)
+			}
+			if strings.TrimSpace(slave.ExpectedState) == "" {
+				sources.EtherCAT.Masters[i].Slaves[j].ExpectedState = sources.EtherCAT.Masters[i].ExpectedState
+			}
 		}
 	}
 	if sources.Network.Enabled && len(sources.Network.Interfaces) == 0 {

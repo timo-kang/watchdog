@@ -106,8 +106,10 @@ Current default mapping:
 
 - host/process/module/CAN `warn` -> `notify`
 - host/process/module/CAN `fail` or `stale` -> `degrade`
-- EtherCAT lost slave -> `safe_stop`
 - EtherCAT required link down -> `safe_stop`
+- EtherCAT critical slave lost, not OP, or faulted -> `safe_stop`
+- EtherCAT aggregate lost slave without topology -> `safe_stop`
+- EtherCAT optional-only slave warning -> `notify`
 - other non-OK EtherCAT -> `degrade`
 - return to healthy -> `resolve`
 

@@ -444,6 +444,85 @@ func TestEvaluateEtherCATWarnsOnNonOperationalSlave(t *testing.T) {
 	}
 }
 
+func TestEvaluateEtherCATFailsOnCriticalSlaveFault(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		EtherCAT: config.EtherCATRules{
+			MissingSlavesWarn: 1,
+			MissingSlavesFail: 2,
+			WKCWarnRatio:      0.95,
+			WKCFailRatio:      0.80,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "actuators",
+		SourceType:  "ethercat",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"ethercat.link_known":             1,
+			"ethercat.link_up":                1,
+			"ethercat.require_link":           1,
+			"ethercat.slaves_seen":            12,
+			"ethercat.expected_slaves":        12,
+			"ethercat.criticality_known":      1,
+			"ethercat.critical_slaves_not_op": 1,
+			"ethercat.optional_slaves_lost":   1,
+			"ethercat.working_counter":        120,
+			"ethercat.working_counter_goal":   120,
+		},
+		Labels: map[string]string{
+			"master_state":   "op",
+			"expected_state": "op",
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+	if !strings.Contains(status.Reason, "critical non-operational slaves 1 > 0") {
+		t.Fatalf("reason = %q", status.Reason)
+	}
+}
+
+func TestEvaluateEtherCATWarnsOnOptionalSlaveFault(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		EtherCAT: config.EtherCATRules{
+			MissingSlavesWarn: 1,
+			MissingSlavesFail: 2,
+			WKCWarnRatio:      0.95,
+			WKCFailRatio:      0.80,
+		},
+	})
+	observation := health.Observation{
+		SourceID:    "actuators",
+		SourceType:  "ethercat",
+		CollectedAt: time.Now(),
+		Metrics: map[string]float64{
+			"ethercat.link_known":           1,
+			"ethercat.link_up":              1,
+			"ethercat.require_link":         1,
+			"ethercat.slaves_seen":          12,
+			"ethercat.expected_slaves":      12,
+			"ethercat.criticality_known":    1,
+			"ethercat.optional_slaves_lost": 1,
+			"ethercat.working_counter":      120,
+			"ethercat.working_counter_goal": 120,
+		},
+		Labels: map[string]string{
+			"master_state":   "op",
+			"expected_state": "op",
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityWarn {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityWarn)
+	}
+	if !strings.Contains(status.Reason, "optional lost slaves 1 > 0") {
+		t.Fatalf("reason = %q", status.Reason)
+	}
+}
+
 func TestEvaluateCANDoesNotInferMissingNodesWhenUnknown(t *testing.T) {
 	evaluator := New(config.RulesConfig{
 		CAN: config.CANRules{

@@ -62,6 +62,141 @@ func TestBuildRequestEtherCATLostSlaveRequestsSafeStop(t *testing.T) {
 	}
 }
 
+func TestBuildRequestEtherCATCriticalSlaveFaultRequestsSafeStop(t *testing.T) {
+	now := time.Now()
+	snapshot := health.Snapshot{
+		Hostname:    "robot-1",
+		CollectedAt: now,
+		Overall:     health.SeverityFail,
+		Statuses: []health.Status{
+			{
+				SourceID:   "actuators",
+				SourceType: "ethercat",
+				Severity:   health.SeverityFail,
+				Reason:     "critical non-operational slaves 1 > 0",
+				ObservedAt: now,
+				Metrics: map[string]float64{
+					"ethercat.link_known":             1,
+					"ethercat.link_up":                1,
+					"ethercat.require_link":           1,
+					"ethercat.criticality_known":      1,
+					"ethercat.critical_slaves_not_op": 1,
+				},
+			},
+		},
+		Components: []health.ComponentStatus{
+			{
+				ComponentID: "actuators",
+				Severity:    health.SeverityFail,
+				Reason:      "ethercat fail: critical non-operational slaves 1 > 0",
+				ObservedAt:  now,
+				Sources: []health.ComponentSource{
+					{SourceType: "ethercat", Severity: health.SeverityFail, Reason: "critical non-operational slaves 1 > 0", ObservedAt: now},
+				},
+			},
+		},
+	}
+
+	request, ok := BuildRequest(nil, snapshot, "/tmp/incident.json", true)
+	if !ok {
+		t.Fatal("expected request")
+	}
+	if request.RequestedAction != ActionSafeStop {
+		t.Fatalf("requested_action = %s, want %s", request.RequestedAction, ActionSafeStop)
+	}
+}
+
+func TestBuildRequestEtherCATOptionalSlaveFaultRequestsNotify(t *testing.T) {
+	now := time.Now()
+	snapshot := health.Snapshot{
+		Hostname:    "robot-1",
+		CollectedAt: now,
+		Overall:     health.SeverityWarn,
+		Statuses: []health.Status{
+			{
+				SourceID:   "actuators",
+				SourceType: "ethercat",
+				Severity:   health.SeverityWarn,
+				Reason:     "optional lost slaves 1 > 0",
+				ObservedAt: now,
+				Metrics: map[string]float64{
+					"ethercat.link_known":           1,
+					"ethercat.link_up":              1,
+					"ethercat.require_link":         1,
+					"ethercat.criticality_known":    1,
+					"ethercat.optional_slaves_lost": 1,
+				},
+			},
+		},
+		Components: []health.ComponentStatus{
+			{
+				ComponentID: "actuators",
+				Severity:    health.SeverityWarn,
+				Reason:      "ethercat warn: optional lost slaves 1 > 0",
+				ObservedAt:  now,
+				Sources: []health.ComponentSource{
+					{SourceType: "ethercat", Severity: health.SeverityWarn, Reason: "optional lost slaves 1 > 0", ObservedAt: now},
+				},
+			},
+		},
+	}
+
+	request, ok := BuildRequest(nil, snapshot, "", true)
+	if !ok {
+		t.Fatal("expected request")
+	}
+	if request.RequestedAction != ActionNotify {
+		t.Fatalf("requested_action = %s, want %s", request.RequestedAction, ActionNotify)
+	}
+	if len(request.Components) != 1 || request.Components[0].RequestedAction != ActionNotify {
+		t.Fatalf("component action = %#v", request.Components)
+	}
+}
+
+func TestBuildRequestEtherCATImportantSlaveFaultRequestsDegrade(t *testing.T) {
+	now := time.Now()
+	snapshot := health.Snapshot{
+		Hostname:    "robot-1",
+		CollectedAt: now,
+		Overall:     health.SeverityFail,
+		Statuses: []health.Status{
+			{
+				SourceID:   "actuators",
+				SourceType: "ethercat",
+				Severity:   health.SeverityFail,
+				Reason:     "important lost slaves 1 > 0",
+				ObservedAt: now,
+				Metrics: map[string]float64{
+					"ethercat.link_known":            1,
+					"ethercat.link_up":               1,
+					"ethercat.require_link":          1,
+					"ethercat.criticality_known":     1,
+					"ethercat.important_slaves_lost": 1,
+				},
+			},
+		},
+		Components: []health.ComponentStatus{
+			{
+				ComponentID: "actuators",
+				Severity:    health.SeverityFail,
+				Reason:      "ethercat fail: important lost slaves 1 > 0",
+				ObservedAt:  now,
+				Sources: []health.ComponentSource{
+					{SourceType: "ethercat", Severity: health.SeverityFail, Reason: "important lost slaves 1 > 0", ObservedAt: now},
+				},
+			},
+		},
+	}
+
+	request, ok := BuildRequest(nil, snapshot, "", true)
+	if !ok {
+		t.Fatal("expected request")
+	}
+	if request.RequestedAction != ActionDegrade {
+		t.Fatalf("requested_action = %s, want %s", request.RequestedAction, ActionDegrade)
+	}
+}
+
 func TestBuildRequestWarnHostRequestsNotify(t *testing.T) {
 	now := time.Now()
 	snapshot := health.Snapshot{

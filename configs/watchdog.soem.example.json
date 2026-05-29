@@ -44,6 +44,26 @@
             "/usr/local/bin/watchdog-soem-probe",
             "--master",
             "master0"
+          ],
+          "slaves": [
+            {
+              "position": 1,
+              "name": "left_hip_drive",
+              "criticality": "critical",
+              "expected_state": "op"
+            },
+            {
+              "position": 2,
+              "name": "right_hip_drive",
+              "criticality": "critical",
+              "expected_state": "op"
+            },
+            {
+              "position": 12,
+              "name": "diagnostic_io",
+              "criticality": "optional",
+              "expected_state": "op"
+            }
           ]
         }
       ]

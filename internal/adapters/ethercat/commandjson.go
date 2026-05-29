@@ -21,8 +21,23 @@ type commandJSONPayload struct {
 	SlaveErrors            int                `json:"slave_errors"`
 	WorkingCounter         int                `json:"working_counter"`
 	WorkingCounterExpected int                `json:"working_counter_expected"`
+	Slaves                 []commandJSONSlave `json:"slaves"`
 	Labels                 map[string]string  `json:"labels"`
 	Metrics                map[string]float64 `json:"metrics"`
+}
+
+type commandJSONSlave struct {
+	Position       int    `json:"position"`
+	Name           string `json:"name"`
+	ConfiguredName string `json:"configured_name"`
+	VendorID       string `json:"vendor_id"`
+	ProductCode    string `json:"product_code"`
+	State          string `json:"state"`
+	ExpectedState  string `json:"expected_state"`
+	Online         *bool  `json:"online"`
+	Lost           bool   `json:"lost"`
+	Criticality    string `json:"criticality"`
+	Error          string `json:"error"`
 }
 
 func probeCommandJSON(ctx context.Context, _ string, master config.EtherCATMasterConfig) (MasterStatus, error) {
@@ -50,6 +65,7 @@ func masterStatusFromCommandPayload(payload commandJSONPayload) (MasterStatus, e
 		SlaveErrors:            payload.SlaveErrors,
 		WorkingCounter:         payload.WorkingCounter,
 		WorkingCounterExpected: payload.WorkingCounterExpected,
+		Slaves:                 commandSlavesToStatus(payload.Slaves),
 		AdditionalInfo:         payload.Labels,
 		AdditionalMetrics:      payload.Metrics,
 	}
@@ -63,4 +79,31 @@ func masterStatusFromCommandPayload(payload commandJSONPayload) (MasterStatus, e
 	}
 
 	return status, nil
+}
+
+func commandSlavesToStatus(slaves []commandJSONSlave) []SlaveStatus {
+	if len(slaves) == 0 {
+		return nil
+	}
+	out := make([]SlaveStatus, 0, len(slaves))
+	for _, slave := range slaves {
+		status := SlaveStatus{
+			Position:       slave.Position,
+			Name:           slave.Name,
+			ConfiguredName: slave.ConfiguredName,
+			VendorID:       slave.VendorID,
+			ProductCode:    slave.ProductCode,
+			State:          slave.State,
+			ExpectedState:  slave.ExpectedState,
+			Lost:           slave.Lost,
+			Criticality:    slave.Criticality,
+			Error:          slave.Error,
+		}
+		if slave.Online != nil {
+			status.OnlineKnown = true
+			status.Online = *slave.Online
+		}
+		out = append(out, status)
+	}
+	return out
 }

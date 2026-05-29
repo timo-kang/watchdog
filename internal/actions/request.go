@@ -148,7 +148,21 @@ func recommendAction(component health.ComponentStatus, statuses []health.Status)
 		return ActionNone
 	}
 	if hasSourceType(statuses, "ethercat") {
-		if anyMetricAbove(statuses, "ethercat.slaves_lost", 0) || isRequiredLinkDown(statuses, "ethercat") {
+		if isRequiredLinkDown(statuses, "ethercat") {
+			return ActionSafeStop
+		}
+		if anyMetricAbove(statuses, "ethercat.criticality_known", 0) {
+			if anyMetricAbove(statuses, "ethercat.critical_slaves_lost", 0) ||
+				anyMetricAbove(statuses, "ethercat.critical_slaves_not_op", 0) ||
+				anyMetricAbove(statuses, "ethercat.critical_slave_errors", 0) {
+				return ActionSafeStop
+			}
+			if component.Severity == health.SeverityWarn && etherCATOnlyOptionalFaults(statuses) {
+				return ActionNotify
+			}
+			return ActionDegrade
+		}
+		if anyMetricAbove(statuses, "ethercat.slaves_lost", 0) {
 			return ActionSafeStop
 		}
 		return ActionDegrade
@@ -174,6 +188,29 @@ func recommendAction(component health.ComponentStatus, statuses []health.Status)
 	default:
 		return ActionNone
 	}
+}
+
+func etherCATOnlyOptionalFaults(statuses []health.Status) bool {
+	hasOptional := false
+	for _, status := range statuses {
+		if status.SourceType != "ethercat" {
+			continue
+		}
+		if metric(status.Metrics, "ethercat.critical_slaves_lost") > 0 ||
+			metric(status.Metrics, "ethercat.critical_slaves_not_op") > 0 ||
+			metric(status.Metrics, "ethercat.critical_slave_errors") > 0 ||
+			metric(status.Metrics, "ethercat.important_slaves_lost") > 0 ||
+			metric(status.Metrics, "ethercat.important_slaves_not_op") > 0 ||
+			metric(status.Metrics, "ethercat.important_slave_errors") > 0 {
+			return false
+		}
+		if metric(status.Metrics, "ethercat.optional_slaves_lost") > 0 ||
+			metric(status.Metrics, "ethercat.optional_slaves_not_op") > 0 ||
+			metric(status.Metrics, "ethercat.optional_slave_errors") > 0 {
+			hasOptional = true
+		}
+	}
+	return hasOptional
 }
 
 func matchingStatuses(statuses []health.Status, componentID string) []health.Status {

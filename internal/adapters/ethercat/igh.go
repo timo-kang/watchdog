@@ -73,6 +73,18 @@ func parseSlavesOutput(raw []byte) (MasterStatus, error) {
 		if fields[3] == "E" {
 			status.SlaveErrors++
 		}
+		position, _ := strconv.Atoi(fields[0])
+		slave := SlaveStatus{
+			Position: position,
+			State:    fields[2],
+		}
+		if len(fields) > 4 {
+			slave.Name = strings.Join(fields[4:], " ")
+		}
+		if fields[3] == "E" {
+			slave.Error = "igh-cli error flag"
+		}
+		status.Slaves = append(status.Slaves, slave)
 	}
 
 	status.MasterState = deriveState(states)

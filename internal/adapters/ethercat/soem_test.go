@@ -51,6 +51,10 @@ func TestCollectWithSOEMBackend(t *testing.T) {
 				ExpectedSlaves: 12,
 				RequireLink:    true,
 				ProbeCommand:   []string{"/usr/local/bin/watchdog-soem-probe", "--master", "master0"},
+				Slaves: []config.EtherCATSlaveConfig{
+					{Position: 2, Name: "left_hip", Criticality: "critical", ExpectedState: "op"},
+					{Position: 12, Name: "lidar", Criticality: "optional", ExpectedState: "op"},
+				},
 			},
 		},
 	})
@@ -84,6 +88,18 @@ func TestCollectWithSOEMBackend(t *testing.T) {
 	}
 	if observation.Metrics["ethercat.slave_errors"] != 2 {
 		t.Fatalf("ethercat.slave_errors = %f, want 2", observation.Metrics["ethercat.slave_errors"])
+	}
+	if observation.Metrics["ethercat.critical_slaves_not_op"] != 1 {
+		t.Fatalf("ethercat.critical_slaves_not_op = %f, want 1", observation.Metrics["ethercat.critical_slaves_not_op"])
+	}
+	if observation.Metrics["ethercat.optional_slaves_lost"] != 1 {
+		t.Fatalf("ethercat.optional_slaves_lost = %f, want 1", observation.Metrics["ethercat.optional_slaves_lost"])
+	}
+	if observation.Labels["faulted_critical_slave_names"] != "left_hip" {
+		t.Fatalf("faulted_critical_slave_names = %q, want left_hip", observation.Labels["faulted_critical_slave_names"])
+	}
+	if observation.Labels["faulted_optional_slave_names"] != "lidar" {
+		t.Fatalf("faulted_optional_slave_names = %q, want lidar", observation.Labels["faulted_optional_slave_names"])
 	}
 	if observation.Labels["master_state"] != "safeop" {
 		t.Fatalf("master_state = %q, want safeop", observation.Labels["master_state"])

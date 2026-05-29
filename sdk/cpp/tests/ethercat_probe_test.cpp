@@ -82,6 +82,29 @@ bool TestValidateRejectsDuplicateSlavePosition() {
   return true;
 }
 
+bool TestEncodeProbeReportIncludesSlaveCriticality() {
+  watchdog::ethercat::ProbeReport report;
+  report.slaves_seen = 1;
+  watchdog::ethercat::SlaveStatus slave;
+  slave.position = 1;
+  slave.name = "left_hip";
+  slave.state = "safeop";
+  slave.criticality = "critical";
+  report.slaves.push_back(slave);
+
+  std::string error;
+  const std::string payload = watchdog::ethercat::EncodeProbeReport(report, &error);
+  if (!error.empty()) {
+    std::cerr << "unexpected encode error: " << error << '\n';
+    return false;
+  }
+  if (payload.find("\"criticality\":\"critical\"") == std::string::npos) {
+    std::cerr << "payload missing slave criticality\n";
+    return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 int main() {
@@ -89,6 +112,9 @@ int main() {
     return EXIT_FAILURE;
   }
   if (!TestValidateRejectsDuplicateSlavePosition()) {
+    return EXIT_FAILURE;
+  }
+  if (!TestEncodeProbeReportIncludesSlaveCriticality()) {
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;

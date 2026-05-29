@@ -455,14 +455,44 @@ func (e *Evaluator) evaluateEtherCAT(status health.Status) health.Status {
 		update(health.SeverityWarn, fmt.Sprintf("missing slaves %d >= warn %d", missingSlaves, rules.MissingSlavesWarn))
 	}
 
-	if slaveErrors := int(metric(status.Metrics, "ethercat.slave_errors")); slaveErrors > 0 {
-		update(health.SeverityWarn, fmt.Sprintf("slave errors %d > 0", slaveErrors))
-	}
-	if slavesLost := int(metric(status.Metrics, "ethercat.slaves_lost")); slavesLost > 0 {
-		update(health.SeverityFail, fmt.Sprintf("lost slaves %d > 0", slavesLost))
-	}
-	if slavesNotOp := int(metric(status.Metrics, "ethercat.slaves_not_op")); slavesNotOp > 0 {
-		update(health.SeverityWarn, fmt.Sprintf("non-operational slaves %d > 0", slavesNotOp))
+	if metric(status.Metrics, "ethercat.criticality_known") > 0 {
+		if criticalLost := int(metric(status.Metrics, "ethercat.critical_slaves_lost")); criticalLost > 0 {
+			update(health.SeverityFail, fmt.Sprintf("critical lost slaves %d > 0", criticalLost))
+		}
+		if importantLost := int(metric(status.Metrics, "ethercat.important_slaves_lost")); importantLost > 0 {
+			update(health.SeverityFail, fmt.Sprintf("important lost slaves %d > 0", importantLost))
+		}
+		if optionalLost := int(metric(status.Metrics, "ethercat.optional_slaves_lost")); optionalLost > 0 {
+			update(health.SeverityWarn, fmt.Sprintf("optional lost slaves %d > 0", optionalLost))
+		}
+		if criticalNotOp := int(metric(status.Metrics, "ethercat.critical_slaves_not_op")); criticalNotOp > 0 {
+			update(health.SeverityFail, fmt.Sprintf("critical non-operational slaves %d > 0", criticalNotOp))
+		}
+		if importantNotOp := int(metric(status.Metrics, "ethercat.important_slaves_not_op")); importantNotOp > 0 {
+			update(health.SeverityWarn, fmt.Sprintf("important non-operational slaves %d > 0", importantNotOp))
+		}
+		if optionalNotOp := int(metric(status.Metrics, "ethercat.optional_slaves_not_op")); optionalNotOp > 0 {
+			update(health.SeverityWarn, fmt.Sprintf("optional non-operational slaves %d > 0", optionalNotOp))
+		}
+		if criticalErrors := int(metric(status.Metrics, "ethercat.critical_slave_errors")); criticalErrors > 0 {
+			update(health.SeverityFail, fmt.Sprintf("critical slave errors %d > 0", criticalErrors))
+		}
+		if importantErrors := int(metric(status.Metrics, "ethercat.important_slave_errors")); importantErrors > 0 {
+			update(health.SeverityWarn, fmt.Sprintf("important slave errors %d > 0", importantErrors))
+		}
+		if optionalErrors := int(metric(status.Metrics, "ethercat.optional_slave_errors")); optionalErrors > 0 {
+			update(health.SeverityWarn, fmt.Sprintf("optional slave errors %d > 0", optionalErrors))
+		}
+	} else {
+		if slaveErrors := int(metric(status.Metrics, "ethercat.slave_errors")); slaveErrors > 0 {
+			update(health.SeverityWarn, fmt.Sprintf("slave errors %d > 0", slaveErrors))
+		}
+		if slavesLost := int(metric(status.Metrics, "ethercat.slaves_lost")); slavesLost > 0 {
+			update(health.SeverityFail, fmt.Sprintf("lost slaves %d > 0", slavesLost))
+		}
+		if slavesNotOp := int(metric(status.Metrics, "ethercat.slaves_not_op")); slavesNotOp > 0 {
+			update(health.SeverityWarn, fmt.Sprintf("non-operational slaves %d > 0", slavesNotOp))
+		}
 	}
 
 	expectedWKC := metric(status.Metrics, "ethercat.working_counter_goal")

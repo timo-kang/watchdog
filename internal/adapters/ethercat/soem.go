@@ -17,11 +17,12 @@ type soemJSONPayload struct {
 }
 
 type soemSlaveStatus struct {
-	Position int    `json:"position"`
-	Name     string `json:"name"`
-	State    string `json:"state"`
-	Lost     bool   `json:"lost"`
-	Error    string `json:"error"`
+	Position    int    `json:"position"`
+	Name        string `json:"name"`
+	State       string `json:"state"`
+	Lost        bool   `json:"lost"`
+	Criticality string `json:"criticality"`
+	Error       string `json:"error"`
 }
 
 func probeSOEM(ctx context.Context, _ string, master config.EtherCATMasterConfig) (MasterStatus, error) {
@@ -60,6 +61,7 @@ func parseSOEMJSONOutput(raw []byte, expectedState string) (MasterStatus, error)
 	if status.MasterState == "" {
 		status.MasterState = deriveSOEMMasterState(payload.Slaves, expectedState)
 	}
+	status.Slaves = make([]SlaveStatus, 0, len(payload.Slaves))
 
 	lostCount := 0
 	notOperationalCount := 0
@@ -72,6 +74,14 @@ func parseSOEMJSONOutput(raw []byte, expectedState string) (MasterStatus, error)
 	}
 
 	for _, slave := range payload.Slaves {
+		status.Slaves = append(status.Slaves, SlaveStatus{
+			Position:    slave.Position,
+			Name:        slave.Name,
+			State:       slave.State,
+			Lost:        slave.Lost,
+			Criticality: slave.Criticality,
+			Error:       slave.Error,
+		})
 		normalizedState := normalizeALState(slave.State)
 		hasFault := false
 		if slave.Lost {

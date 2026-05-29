@@ -28,6 +28,11 @@ func TestCollectWithCommandJSONBackend(t *testing.T) {
 			"slave_errors":0,
 			"working_counter":120,
 			"working_counter_expected":120,
+			"slaves":[
+				{"position":1,"name":"left_hip","state":"op","online":true},
+				{"position":2,"name":"right_hip","state":"op","online":false},
+				{"position":3,"name":"rear_camera","state":"op","lost":true}
+			],
 			"labels":{"probe":"vendor-ethercat"},
 			"metrics":{"ethercat.dc_drift_us":4.25}
 		}`), nil
@@ -44,6 +49,11 @@ func TestCollectWithCommandJSONBackend(t *testing.T) {
 				ExpectedSlaves: 12,
 				RequireLink:    true,
 				ProbeCommand:   []string{"/usr/local/bin/ethercat-probe", "--master", "master0"},
+				Slaves: []config.EtherCATSlaveConfig{
+					{Position: 1, Name: "left_hip", Criticality: "critical", ExpectedState: "op"},
+					{Position: 2, Name: "right_hip", Criticality: "critical", ExpectedState: "op"},
+					{Position: 3, Name: "rear_camera", Criticality: "optional", ExpectedState: "op"},
+				},
 			},
 		},
 	})
@@ -71,5 +81,11 @@ func TestCollectWithCommandJSONBackend(t *testing.T) {
 	}
 	if observation.Labels["backend"] != "command-json" {
 		t.Fatalf("backend label = %q, want command-json", observation.Labels["backend"])
+	}
+	if observation.Metrics["ethercat.critical_slaves_lost"] != 1 {
+		t.Fatalf("ethercat.critical_slaves_lost = %f, want 1", observation.Metrics["ethercat.critical_slaves_lost"])
+	}
+	if observation.Metrics["ethercat.optional_slaves_lost"] != 1 {
+		t.Fatalf("ethercat.optional_slaves_lost = %f, want 1", observation.Metrics["ethercat.optional_slaves_lost"])
 	}
 }

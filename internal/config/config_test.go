@@ -269,6 +269,105 @@ func TestLoadRequiresProbeCommandForEtherCATSOEM(t *testing.T) {
 	}
 }
 
+func TestLoadNormalizesEtherCATSlaveTopology(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "watchdog.json")
+	data := `{
+		"poll_interval": "2s",
+		"incident_dir": "./var/incidents",
+		"sources": {
+			"host": {"enabled": false},
+			"module_reports": {
+				"enabled": false,
+				"socket_path": "./var/run/watchdog/module.sock",
+				"max_message_bytes": 4096,
+				"default_stale_after": "5s"
+			},
+			"systemd": {"enabled": false, "units": []},
+			"can": {"enabled": false, "backend": "socketcan", "interfaces": []},
+			"ethercat": {
+				"enabled": true,
+				"backend": "igh",
+				"masters": [
+					{
+						"name": "master0",
+						"source_id": "actuators",
+						"expected_state": "op",
+						"expected_slaves": 2,
+						"require_link": true,
+						"slaves": [
+							{"position": 1, "name": "left_hip", "criticality": "critical"},
+							{"position": 2, "name": "diagnostic_io"}
+						]
+					}
+				]
+			}
+		},
+		"rules": {}
+	}`
+	if err := os.WriteFile(configPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	slaves := cfg.Sources.EtherCAT.Masters[0].Slaves
+	if len(slaves) != 2 {
+		t.Fatalf("len(slaves) = %d, want 2", len(slaves))
+	}
+	if slaves[0].Criticality != "critical" || slaves[0].ExpectedState != "op" {
+		t.Fatalf("first slave = %#v", slaves[0])
+	}
+	if slaves[1].Criticality != "important" || slaves[1].ExpectedState != "op" {
+		t.Fatalf("second slave = %#v", slaves[1])
+	}
+}
+
+func TestLoadRejectsInvalidEtherCATSlaveCriticality(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "watchdog.json")
+	data := `{
+		"poll_interval": "2s",
+		"incident_dir": "./var/incidents",
+		"sources": {
+			"host": {"enabled": false},
+			"module_reports": {
+				"enabled": false,
+				"socket_path": "./var/run/watchdog/module.sock",
+				"max_message_bytes": 4096,
+				"default_stale_after": "5s"
+			},
+			"systemd": {"enabled": false, "units": []},
+			"can": {"enabled": false, "backend": "socketcan", "interfaces": []},
+			"ethercat": {
+				"enabled": true,
+				"backend": "igh",
+				"masters": [
+					{
+						"name": "master0",
+						"expected_state": "op",
+						"slaves": [
+							{"position": 1, "name": "left_hip", "criticality": "nice_to_have"}
+						]
+					}
+				]
+			}
+		},
+		"rules": {}
+	}`
+	if err := os.WriteFile(configPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "sources.ethercat.masters[0].slaves[0].criticality") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestLoadRequiresNetworkInterfacesWhenEnabled(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "watchdog.json")
 	data := `{

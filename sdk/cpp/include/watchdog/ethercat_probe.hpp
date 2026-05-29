@@ -19,6 +19,7 @@ struct SlaveStatus {
   std::string name;
   std::string state = "op";
   bool lost = false;
+  std::string criticality;
   std::string error;
 };
 
@@ -76,6 +77,18 @@ inline std::string NormalizeALState(std::string value) {
     return "op";
   }
   return value;
+}
+
+inline std::string NormalizeCriticality(std::string value) {
+  for (char& ch : value) {
+    if (ch >= 'A' && ch <= 'Z') {
+      ch = static_cast<char>(ch - 'A' + 'a');
+    }
+  }
+  if (value == "critical" || value == "important" || value == "optional") {
+    return value;
+  }
+  return "";
 }
 
 inline std::string SOEMStateToString(std::uint16_t state) {
@@ -206,6 +219,12 @@ inline bool ValidateProbeReport(const ProbeReport& report, std::string* error = 
     if (NormalizeALState(slave.state).empty()) {
       if (error != nullptr) {
         *error = "slave state must not be empty";
+      }
+      return false;
+    }
+    if (!slave.criticality.empty() && NormalizeCriticality(slave.criticality).empty()) {
+      if (error != nullptr) {
+        *error = "slave criticality must be critical, important, or optional";
       }
       return false;
     }
@@ -344,6 +363,9 @@ inline std::string EncodeProbeReport(const ProbeReport& input, std::string* erro
     out << ",\"state\":\"" << EscapeJSON(NormalizeALState(slave.state)) << '"';
     if (slave.lost) {
       out << ",\"lost\":true";
+    }
+    if (!slave.criticality.empty()) {
+      out << ",\"criticality\":\"" << EscapeJSON(NormalizeCriticality(slave.criticality)) << '"';
     }
     if (!slave.error.empty()) {
       out << ",\"error\":\"" << EscapeJSON(slave.error) << '"';
