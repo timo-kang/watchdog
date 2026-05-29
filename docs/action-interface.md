@@ -215,6 +215,10 @@ Suggested command mapping:
 - `safe_stop` -> `request_safe_stop`
 - `resolve` -> `clear_watchdog_condition`
 
+`suggested_command` is advisory. It is not executed by the watchdog, and a
+platform FSM must map it to an approved robot behavior before any actuation,
+drive state change, fault clear, restart, or power transition happens.
+
 That gives you a clean stepping stone:
 
 - first: watchdog -> local supervisor -> hook/script/service
