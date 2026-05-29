@@ -25,6 +25,7 @@ import (
 	"watchdog/internal/config"
 	"watchdog/internal/incident"
 	"watchdog/internal/metrics"
+	"watchdog/internal/rawlog"
 	"watchdog/internal/rules"
 )
 
@@ -82,11 +83,12 @@ func main() {
 
 	evaluator := rules.New(cfg.Rules)
 	incidentWriter := incident.New(cfg.IncidentDir, cfg.LogTransitionsOnly)
+	rawLogLinker := buildRawLogLinker(cfg)
 	actionSink := actions.NewMultiSink(
 		actions.NewTransitionLogger(logger, cfg.LogTransitionsOnly),
 		buildSocketSink(cfg),
 	)
-	daemon := app.New(logger, cfg.PollInterval, collectors, evaluator, incidentWriter, actionSink, watchdogMetrics)
+	daemon := app.New(logger, cfg.PollInterval, collectors, evaluator, incidentWriter, rawLogLinker, actionSink, watchdogMetrics)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -116,4 +118,16 @@ func buildSocketSink(cfg config.Config) actions.Sink {
 		cfg.Actions.UnixSocket.SpoolDir,
 		cfg.Actions.UnixSocket.ReplayBatchSize,
 	)
+}
+
+func buildRawLogLinker(cfg config.Config) *rawlog.Linker {
+	if !cfg.RawLogs.Enabled {
+		return nil
+	}
+	return &rawlog.Linker{
+		ManifestDir:      cfg.RawLogs.ManifestDir,
+		IncidentIndexDir: cfg.RawLogs.IncidentIndexDir,
+		PreWindow:        cfg.RawLogs.PreWindow,
+		PostWindow:       cfg.RawLogs.PostWindow,
+	}
 }

@@ -121,6 +121,8 @@ Persistent state and incidents:
 
 - `/var/lib/watchdog/incidents/`
 - `/var/lib/watchdog/actions/`
+- `/var/lib/watchdog/logs/manifests/`
+- `/var/lib/watchdog/logs/incident-index/`
 - `/var/lib/watchdog/supervisor/current_state.json`
 - `/var/lib/watchdog/supervisor/latest.json`
 - `/var/lib/watchdog/supervisor/requests/`
@@ -160,6 +162,21 @@ Important files:
 sudo jq . /var/lib/watchdog/supervisor/current_state.json
 sudo jq . /var/lib/watchdog/supervisor/latest.json
 sudo ls -lt /var/lib/watchdog/incidents
+sudo ls -lt /var/lib/watchdog/logs/incident-index
+```
+
+Raw log linking is optional and disabled by default. When enabled, watchdog does
+not write high-rate raw data itself; it scans raw segment manifests and writes a
+sidecar index for incident review.
+
+```json
+"raw_logs": {
+  "enabled": true,
+  "manifest_dir": "/var/lib/watchdog/logs/manifests",
+  "incident_index_dir": "/var/lib/watchdog/logs/incident-index",
+  "pre_window": "30s",
+  "post_window": "30s"
+}
 ```
 
 ## Prometheus and Grafana
@@ -397,6 +414,7 @@ docker compose -f deploy/docker/docker-compose.sim.yml exec watchdog-supervisor 
 - `internal/config`: config loading and validation
 - `internal/health`: normalized health model
 - `internal/incident`: incident persistence
+- `internal/rawlog`: incident-to-raw-segment indexing
 - `internal/rules`: severity evaluation
 - `internal/supervisor`: local supervisor state and hook execution
 - `deploy/systemd`: unit files
@@ -420,6 +438,7 @@ What it already does well:
 - local health polling
 - component-level state derivation
 - incident snapshot writing
+- optional incident-to-raw-log index linking
 - supervisor latching and audit
 - C++ heartbeat integration
 - baseline host, storage, time, network, power, CAN, and EtherCAT inputs

@@ -20,11 +20,16 @@ type App struct {
 	collectors   []adapters.Collector
 	evaluator    *rules.Evaluator
 	incident     *incident.Writer
+	rawLogs      RawLogLinker
 	actionSink   actions.Sink
 	observer     Observer
 	lastSnapshot *health.Snapshot
 	hostname     string
 	started      bool
+}
+
+type RawLogLinker interface {
+	LinkIncident(incidentPath string, snapshot health.Snapshot) (string, error)
 }
 
 type Observer interface {
@@ -40,6 +45,7 @@ func New(
 	collectors []adapters.Collector,
 	evaluator *rules.Evaluator,
 	incidentWriter *incident.Writer,
+	rawLogLinker RawLogLinker,
 	actionSink actions.Sink,
 	observer Observer,
 ) *App {
@@ -50,6 +56,7 @@ func New(
 		collectors: collectors,
 		evaluator:  evaluator,
 		incident:   incidentWriter,
+		rawLogs:    rawLogLinker,
 		actionSink: actionSink,
 		observer:   observer,
 		hostname:   hostname,
@@ -156,6 +163,14 @@ func (a *App) tick(ctx context.Context) error {
 	}
 	if err != nil {
 		a.logger.Printf("write incident: %v", err)
+	}
+	if err == nil && incidentPath != "" && a.rawLogs != nil {
+		indexPath, err := a.rawLogs.LinkIncident(incidentPath, snapshot)
+		if err != nil {
+			a.logger.Printf("link raw logs: %v", err)
+		} else if indexPath != "" {
+			a.logger.Printf("raw log index=%s incident=%s", indexPath, incidentPath)
+		}
 	}
 
 	if err := a.actionSink.HandleTransition(ctx, a.lastSnapshot, snapshot, incidentPath); err != nil {

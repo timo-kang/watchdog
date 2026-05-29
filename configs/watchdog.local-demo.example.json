@@ -7,6 +7,13 @@
     "listen_address": "127.0.0.1:9108",
     "path": "/metrics"
   },
+  "raw_logs": {
+    "enabled": false,
+    "manifest_dir": "./var/lib/watchdog/logs/manifests",
+    "incident_index_dir": "./var/lib/watchdog/logs/incident-index",
+    "pre_window": "30s",
+    "post_window": "30s"
+  },
   "actions": {
     "unix_socket": {
       "enabled": true,

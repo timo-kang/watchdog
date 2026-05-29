@@ -15,6 +15,7 @@ type Config struct {
 	IncidentDir        string
 	LogTransitionsOnly bool
 	Metrics            metrics.EndpointConfig
+	RawLogs            RawLogsConfig
 	Actions            ActionsConfig
 	Sources            SourcesConfig
 	Rules              RulesConfig
@@ -25,9 +26,26 @@ type fileConfig struct {
 	IncidentDir        string                 `json:"incident_dir"`
 	LogTransitionsOnly bool                   `json:"log_transitions_only"`
 	Metrics            metrics.EndpointConfig `json:"metrics"`
+	RawLogs            fileRawLogsConfig      `json:"raw_logs"`
 	Actions            ActionsConfig          `json:"actions"`
 	Sources            fileSources            `json:"sources"`
 	Rules              RulesConfig            `json:"rules"`
+}
+
+type RawLogsConfig struct {
+	Enabled          bool
+	ManifestDir      string
+	IncidentIndexDir string
+	PreWindow        time.Duration
+	PostWindow       time.Duration
+}
+
+type fileRawLogsConfig struct {
+	Enabled          bool   `json:"enabled"`
+	ManifestDir      string `json:"manifest_dir"`
+	IncidentIndexDir string `json:"incident_index_dir"`
+	PreWindow        string `json:"pre_window"`
+	PostWindow       string `json:"post_window"`
 }
 
 type ActionsConfig struct {
@@ -277,6 +295,13 @@ func Load(path string) (Config, error) {
 		IncidentDir:        "./var/incidents",
 		LogTransitionsOnly: true,
 		Metrics:            metrics.DefaultEndpoint("127.0.0.1:9108"),
+		RawLogs: fileRawLogsConfig{
+			Enabled:          false,
+			ManifestDir:      "./var/lib/watchdog/logs/manifests",
+			IncidentIndexDir: "./var/lib/watchdog/logs/incident-index",
+			PreWindow:        "30s",
+			PostWindow:       "30s",
+		},
 		Actions: ActionsConfig{
 			UnixSocket: UnixSocketActionConfig{
 				Enabled:         false,
@@ -439,6 +464,10 @@ func Load(path string) (Config, error) {
 
 	if raw.IncidentDir == "" {
 		return Config{}, fmt.Errorf("incident_dir must not be empty")
+	}
+	rawLogs, err := parseRawLogs(raw.RawLogs)
+	if err != nil {
+		return Config{}, err
 	}
 	raw.Metrics = metrics.NormalizeEndpoint(raw.Metrics, "127.0.0.1:9108")
 	if err := metrics.ValidateEndpoint("metrics", raw.Metrics); err != nil {
@@ -662,6 +691,7 @@ func Load(path string) (Config, error) {
 		IncidentDir:        raw.IncidentDir,
 		LogTransitionsOnly: raw.LogTransitionsOnly,
 		Metrics:            raw.Metrics,
+		RawLogs:            rawLogs,
 		Actions:            raw.Actions,
 		Sources:            sources,
 		Rules:              raw.Rules,
@@ -676,6 +706,44 @@ func sanitizeSourceID(value string) string {
 	value = strings.TrimPrefix(value, "/")
 	value = strings.ReplaceAll(value, "/", "-")
 	return value
+}
+
+func parseRawLogs(raw fileRawLogsConfig) (RawLogsConfig, error) {
+	if strings.TrimSpace(raw.PreWindow) == "" {
+		raw.PreWindow = "30s"
+	}
+	if strings.TrimSpace(raw.PostWindow) == "" {
+		raw.PostWindow = "30s"
+	}
+	preWindow, err := time.ParseDuration(raw.PreWindow)
+	if err != nil {
+		return RawLogsConfig{}, fmt.Errorf("parse raw_logs.pre_window: %w", err)
+	}
+	if preWindow < 0 {
+		return RawLogsConfig{}, fmt.Errorf("raw_logs.pre_window must be >= 0")
+	}
+	postWindow, err := time.ParseDuration(raw.PostWindow)
+	if err != nil {
+		return RawLogsConfig{}, fmt.Errorf("parse raw_logs.post_window: %w", err)
+	}
+	if postWindow < 0 {
+		return RawLogsConfig{}, fmt.Errorf("raw_logs.post_window must be >= 0")
+	}
+	if raw.Enabled {
+		if strings.TrimSpace(raw.ManifestDir) == "" {
+			return RawLogsConfig{}, fmt.Errorf("raw_logs.manifest_dir must not be empty when enabled")
+		}
+		if strings.TrimSpace(raw.IncidentIndexDir) == "" {
+			return RawLogsConfig{}, fmt.Errorf("raw_logs.incident_index_dir must not be empty when enabled")
+		}
+	}
+	return RawLogsConfig{
+		Enabled:          raw.Enabled,
+		ManifestDir:      raw.ManifestDir,
+		IncidentIndexDir: raw.IncidentIndexDir,
+		PreWindow:        preWindow,
+		PostWindow:       postWindow,
+	}, nil
 }
 
 func backendRequiresProbeCommand(backend string) bool {

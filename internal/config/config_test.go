@@ -557,6 +557,123 @@ func TestLoadParsesTimeSyncGracePeriod(t *testing.T) {
 	}
 }
 
+func TestLoadParsesRawLogsConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "watchdog.json")
+	data := `{
+		"poll_interval": "2s",
+		"incident_dir": "./var/incidents",
+		"raw_logs": {
+			"enabled": true,
+			"manifest_dir": "./var/lib/watchdog/logs/manifests",
+			"incident_index_dir": "./var/lib/watchdog/logs/incident-index",
+			"pre_window": "45s",
+			"post_window": "15s"
+		},
+		"sources": {
+			"host": {"enabled": false},
+			"module_reports": {
+				"enabled": false,
+				"socket_path": "./var/run/watchdog/module.sock",
+				"max_message_bytes": 4096,
+				"default_stale_after": "5s"
+			}
+		},
+		"rules": {}
+	}`
+	if err := os.WriteFile(configPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if !cfg.RawLogs.Enabled {
+		t.Fatal("raw logs not enabled")
+	}
+	if cfg.RawLogs.ManifestDir != "./var/lib/watchdog/logs/manifests" {
+		t.Fatalf("manifest_dir = %q", cfg.RawLogs.ManifestDir)
+	}
+	if cfg.RawLogs.IncidentIndexDir != "./var/lib/watchdog/logs/incident-index" {
+		t.Fatalf("incident_index_dir = %q", cfg.RawLogs.IncidentIndexDir)
+	}
+	if cfg.RawLogs.PreWindow != 45*time.Second || cfg.RawLogs.PostWindow != 15*time.Second {
+		t.Fatalf("raw log windows = %s/%s", cfg.RawLogs.PreWindow, cfg.RawLogs.PostWindow)
+	}
+}
+
+func TestLoadRejectsEnabledRawLogsWithoutManifestDir(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "watchdog.json")
+	data := `{
+		"poll_interval": "2s",
+		"incident_dir": "./var/incidents",
+		"raw_logs": {
+			"enabled": true,
+			"manifest_dir": "",
+			"incident_index_dir": "./var/lib/watchdog/logs/incident-index",
+			"pre_window": "30s",
+			"post_window": "30s"
+		},
+		"sources": {
+			"host": {"enabled": false},
+			"module_reports": {
+				"enabled": false,
+				"socket_path": "./var/run/watchdog/module.sock",
+				"max_message_bytes": 4096,
+				"default_stale_after": "5s"
+			}
+		},
+		"rules": {}
+	}`
+	if err := os.WriteFile(configPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "raw_logs.manifest_dir") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadRejectsNegativeRawLogWindow(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "watchdog.json")
+	data := `{
+		"poll_interval": "2s",
+		"incident_dir": "./var/incidents",
+		"raw_logs": {
+			"enabled": true,
+			"manifest_dir": "./var/lib/watchdog/logs/manifests",
+			"incident_index_dir": "./var/lib/watchdog/logs/incident-index",
+			"pre_window": "-1s",
+			"post_window": "30s"
+		},
+		"sources": {
+			"host": {"enabled": false},
+			"module_reports": {
+				"enabled": false,
+				"socket_path": "./var/run/watchdog/module.sock",
+				"max_message_bytes": 4096,
+				"default_stale_after": "5s"
+			}
+		},
+		"rules": {}
+	}`
+	if err := os.WriteFile(configPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "raw_logs.pre_window") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestLoadParsesModuleRules(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "watchdog.json")
 	data := `{
