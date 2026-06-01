@@ -179,6 +179,24 @@ sidecar index for incident review.
 }
 ```
 
+`watchdog-log-agent` is the local segment producer used by the simulation and by
+early robot bring-up. It writes JSONL raw segments plus manifest v1 files, then
+reports its own health through the existing module report socket:
+
+```bash
+watchdog-log-agent \
+  -module-socket /run/watchdog/module.sock \
+  -segment-dir /var/lib/watchdog/logs/segments \
+  -manifest-dir /var/lib/watchdog/logs/manifests \
+  -source-id imu.front \
+  -data-type imu \
+  -segment-duration 5s \
+  -sample-interval 100ms
+```
+
+If the module socket is absent, segment writing continues and health reporting is
+skipped for that attempt. Watchdog remains optional for the producer path.
+
 ## Prometheus and Grafana
 
 Both processes can expose Prometheus-compatible metrics:
@@ -406,6 +424,7 @@ docker compose -f deploy/docker/docker-compose.sim.yml exec watchdog-supervisor 
 ## Repository Layout
 
 - `cmd/watchdog`: daemon entrypoint
+- `cmd/watchdog-log-agent`: local raw segment producer
 - `cmd/watchdog-supervisor`: local receiver and hook dispatcher
 - `cmd/watchdogctl`: status CLI
 - `cmd/watchdog-sim-module`: simulation producer
@@ -414,6 +433,7 @@ docker compose -f deploy/docker/docker-compose.sim.yml exec watchdog-supervisor 
 - `internal/config`: config loading and validation
 - `internal/health`: normalized health model
 - `internal/incident`: incident persistence
+- `internal/logagent`: raw log producer orchestration and health reporting
 - `internal/rawlog`: incident-to-raw-segment indexing
 - `internal/rules`: severity evaluation
 - `internal/supervisor`: local supervisor state and hook execution
@@ -439,6 +459,7 @@ What it already does well:
 - component-level state derivation
 - incident snapshot writing
 - optional incident-to-raw-log index linking
+- standalone raw log segment producer
 - supervisor latching and audit
 - C++ heartbeat integration
 - baseline host, storage, time, network, power, CAN, and EtherCAT inputs

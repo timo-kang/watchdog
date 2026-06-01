@@ -24,10 +24,39 @@ services:
       - watchdog-run:/run/watchdog
       - watchdog-var:/var/lib/watchdog
 
+  log-agent-sim:
+    image: watchdog-sim:dev
+    depends_on:
+      - watchdog
+    command:
+      - "/usr/local/bin/watchdog-log-agent"
+      - "-module-socket"
+      - "/run/watchdog/module.sock"
+      - "-segment-dir"
+      - "/var/lib/watchdog/logs/segments"
+      - "-manifest-dir"
+      - "/var/lib/watchdog/logs/manifests"
+      - "-source-id"
+      - "sim.imu"
+      - "-data-type"
+      - "imu"
+      - "-segment-duration"
+      - "1s"
+      - "-sample-interval"
+      - "100ms"
+      - "-stale-after"
+      - "3s"
+      - "-label"
+      - "robot=sim"
+    volumes:
+      - watchdog-run:/run/watchdog
+      - watchdog-var:/var/lib/watchdog
+
   planner-sim:
     image: watchdog-sim:dev
     depends_on:
       - watchdog
+      - log-agent-sim
     command:
       - "/usr/local/bin/watchdog-sim-module"
       - "-socket"

@@ -8,7 +8,7 @@
     "path": "/metrics"
   },
   "raw_logs": {
-    "enabled": false,
+    "enabled": true,
     "manifest_dir": "/var/lib/watchdog/logs/manifests",
     "incident_index_dir": "/var/lib/watchdog/logs/incident-index",
     "pre_window": "30s",
