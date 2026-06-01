@@ -242,6 +242,17 @@ type ModuleRules struct {
 	ControlPeriodWarnConsecutive    int     `json:"control_period_warn_consecutive"`
 	ControlPeriodFailConsecutive    int     `json:"control_period_fail_consecutive"`
 	ControlPeriodRecoverConsecutive int     `json:"control_period_recover_consecutive"`
+	DriveCurrentRatioWarn           float64 `json:"drive_current_ratio_warn"`
+	DriveCurrentRatioFail           float64 `json:"drive_current_ratio_fail"`
+	DriveMotorTempWarnC             float64 `json:"drive_motor_temp_warn_c"`
+	DriveMotorTempFailC             float64 `json:"drive_motor_temp_fail_c"`
+	DriveDriverTempWarnC            float64 `json:"drive_driver_temp_warn_c"`
+	DriveDriverTempFailC            float64 `json:"drive_driver_temp_fail_c"`
+	DriveThermalLoadWarnPct         float64 `json:"drive_thermal_load_warn_pct"`
+	DriveThermalLoadFailPct         float64 `json:"drive_thermal_load_fail_pct"`
+	DriveBusVoltageMinWarnV         float64 `json:"drive_bus_voltage_min_warn_v"`
+	DriveBusVoltageMinFailV         float64 `json:"drive_bus_voltage_min_fail_v"`
+	DriveFaultCodeFail              bool    `json:"drive_fault_code_fail"`
 }
 
 type ProcessRules struct {
@@ -409,6 +420,19 @@ func Load(path string) (Config, error) {
 				RestartWarn: 1,
 				RestartFail: 3,
 			},
+			Module: ModuleRules{
+				DriveCurrentRatioWarn:   0.80,
+				DriveCurrentRatioFail:   1.00,
+				DriveMotorTempWarnC:     80,
+				DriveMotorTempFailC:     95,
+				DriveDriverTempWarnC:    80,
+				DriveDriverTempFailC:    95,
+				DriveThermalLoadWarnPct: 80,
+				DriveThermalLoadFailPct: 100,
+				DriveBusVoltageMinWarnV: 42,
+				DriveBusVoltageMinFailV: 36,
+				DriveFaultCodeFail:      true,
+			},
 			CAN: CANRules{
 				MissingNodesWarn: 1,
 				MissingNodesFail: 2,
@@ -504,6 +528,9 @@ func Load(path string) (Config, error) {
 		raw.Rules.Module.ControlPeriodFailUS > 0 &&
 		raw.Rules.Module.ControlPeriodFailUS <= raw.Rules.Module.ControlPeriodWarnUS {
 		return Config{}, fmt.Errorf("rules.module.control_period_fail_us must be greater than control_period_warn_us")
+	}
+	if err := validateDriveModuleRules(raw.Rules.Module); err != nil {
+		return Config{}, err
 	}
 	normalizeModuleRules(&raw.Rules.Module)
 
@@ -753,6 +780,45 @@ func backendRequiresProbeCommand(backend string) bool {
 	default:
 		return false
 	}
+}
+
+func validateDriveModuleRules(rules ModuleRules) error {
+	checks := []struct {
+		name  string
+		value float64
+	}{
+		{name: "rules.module.drive_current_ratio_warn", value: rules.DriveCurrentRatioWarn},
+		{name: "rules.module.drive_current_ratio_fail", value: rules.DriveCurrentRatioFail},
+		{name: "rules.module.drive_motor_temp_warn_c", value: rules.DriveMotorTempWarnC},
+		{name: "rules.module.drive_motor_temp_fail_c", value: rules.DriveMotorTempFailC},
+		{name: "rules.module.drive_driver_temp_warn_c", value: rules.DriveDriverTempWarnC},
+		{name: "rules.module.drive_driver_temp_fail_c", value: rules.DriveDriverTempFailC},
+		{name: "rules.module.drive_thermal_load_warn_pct", value: rules.DriveThermalLoadWarnPct},
+		{name: "rules.module.drive_thermal_load_fail_pct", value: rules.DriveThermalLoadFailPct},
+		{name: "rules.module.drive_bus_voltage_min_warn_v", value: rules.DriveBusVoltageMinWarnV},
+		{name: "rules.module.drive_bus_voltage_min_fail_v", value: rules.DriveBusVoltageMinFailV},
+	}
+	for _, check := range checks {
+		if check.value < 0 {
+			return fmt.Errorf("%s must be >= 0", check.name)
+		}
+	}
+	if rules.DriveCurrentRatioWarn > 0 && rules.DriveCurrentRatioFail > 0 && rules.DriveCurrentRatioFail <= rules.DriveCurrentRatioWarn {
+		return fmt.Errorf("rules.module.drive_current_ratio_fail must be greater than drive_current_ratio_warn")
+	}
+	if rules.DriveMotorTempWarnC > 0 && rules.DriveMotorTempFailC > 0 && rules.DriveMotorTempFailC <= rules.DriveMotorTempWarnC {
+		return fmt.Errorf("rules.module.drive_motor_temp_fail_c must be greater than drive_motor_temp_warn_c")
+	}
+	if rules.DriveDriverTempWarnC > 0 && rules.DriveDriverTempFailC > 0 && rules.DriveDriverTempFailC <= rules.DriveDriverTempWarnC {
+		return fmt.Errorf("rules.module.drive_driver_temp_fail_c must be greater than drive_driver_temp_warn_c")
+	}
+	if rules.DriveThermalLoadWarnPct > 0 && rules.DriveThermalLoadFailPct > 0 && rules.DriveThermalLoadFailPct <= rules.DriveThermalLoadWarnPct {
+		return fmt.Errorf("rules.module.drive_thermal_load_fail_pct must be greater than drive_thermal_load_warn_pct")
+	}
+	if rules.DriveBusVoltageMinWarnV > 0 && rules.DriveBusVoltageMinFailV > 0 && rules.DriveBusVoltageMinFailV >= rules.DriveBusVoltageMinWarnV {
+		return fmt.Errorf("rules.module.drive_bus_voltage_min_fail_v must be less than drive_bus_voltage_min_warn_v")
+	}
+	return nil
 }
 
 func normalizeModuleRules(rules *ModuleRules) {

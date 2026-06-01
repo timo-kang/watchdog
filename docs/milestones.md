@@ -80,7 +80,8 @@ Out:
 4. `M3 Robot Adapters`
    Output:
    - CAN health adapter
-   - EtherCAT health adapter
+   - node-exported drive hardware diagnostics
+   - optional EtherCAT health adapter
    - network link/jitter adapter
    - sensor freshness adapter contract
    - generic `command-json` bridge for vendor or custom probes
@@ -88,13 +89,14 @@ Out:
    - `SocketCAN` on Linux
    - one real EtherCAT master stack such as `IgH` or `SOEM`
    Exit criteria:
-   - at least one real robot platform can report bus/network/module health through the daemon
+   - at least one real robot platform can report node-owned drive diagnostics, bus, network, and module health through the daemon
    - adapter failures are isolated and observable
    - `command-json` is documented and test-covered for both bus classes
    Current progress:
    - `SocketCAN` backend is in place
    - `IgH` CLI path is partially implemented and awaiting platform validation
-   - `SOEM` backend is in place as the preferred command-driven path for C++ SOEM masters
+   - node-exported drive current/temp/fault diagnostics are evaluated through module reports
+   - `SOEM` backend is in place as an optional command-driven path for C++ SOEM masters
    - `command-json` backend is in place for CAN and EtherCAT
 
 5. `M4 Policy and Actions`

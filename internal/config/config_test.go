@@ -704,7 +704,14 @@ func TestLoadParsesModuleRules(t *testing.T) {
 		"rules": {
 			"module": {
 				"control_period_warn_us": 2000,
-				"control_period_fail_us": 5000
+				"control_period_fail_us": 5000,
+				"drive_current_ratio_warn": 0.8,
+				"drive_current_ratio_fail": 1.0,
+				"drive_motor_temp_warn_c": 80,
+				"drive_motor_temp_fail_c": 95,
+				"drive_bus_voltage_min_warn_v": 42,
+				"drive_bus_voltage_min_fail_v": 36,
+				"drive_fault_code_fail": true
 			}
 		}
 	}`
@@ -730,6 +737,18 @@ func TestLoadParsesModuleRules(t *testing.T) {
 	}
 	if cfg.Rules.Module.ControlPeriodRecoverConsecutive != 3 {
 		t.Fatalf("control_period_recover_consecutive = %d, want 3", cfg.Rules.Module.ControlPeriodRecoverConsecutive)
+	}
+	if cfg.Rules.Module.DriveCurrentRatioWarn != 0.8 || cfg.Rules.Module.DriveCurrentRatioFail != 1.0 {
+		t.Fatalf("drive current ratio rules = %f/%f", cfg.Rules.Module.DriveCurrentRatioWarn, cfg.Rules.Module.DriveCurrentRatioFail)
+	}
+	if cfg.Rules.Module.DriveMotorTempWarnC != 80 || cfg.Rules.Module.DriveMotorTempFailC != 95 {
+		t.Fatalf("drive motor temp rules = %f/%f", cfg.Rules.Module.DriveMotorTempWarnC, cfg.Rules.Module.DriveMotorTempFailC)
+	}
+	if cfg.Rules.Module.DriveBusVoltageMinWarnV != 42 || cfg.Rules.Module.DriveBusVoltageMinFailV != 36 {
+		t.Fatalf("drive bus voltage rules = %f/%f", cfg.Rules.Module.DriveBusVoltageMinWarnV, cfg.Rules.Module.DriveBusVoltageMinFailV)
+	}
+	if !cfg.Rules.Module.DriveFaultCodeFail {
+		t.Fatal("drive_fault_code_fail = false, want true")
 	}
 }
 

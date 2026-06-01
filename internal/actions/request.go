@@ -167,6 +167,12 @@ func recommendAction(component health.ComponentStatus, statuses []health.Status)
 		}
 		return ActionDegrade
 	}
+	if hasSourceType(statuses, "drive") || hasDriveHardwareMetric(statuses) {
+		if component.Severity == health.SeverityWarn {
+			return ActionNotify
+		}
+		return ActionSafeStop
+	}
 	if hasSourceType(statuses, "can") {
 		switch {
 		case anyMetricAbove(statuses, "can.bus_off_count", 0):
@@ -236,6 +242,27 @@ func anyMetricAbove(statuses []health.Status, key string, threshold float64) boo
 	for _, status := range statuses {
 		if status.Metrics != nil && status.Metrics[key] > threshold {
 			return true
+		}
+	}
+	return false
+}
+
+func hasDriveHardwareMetric(statuses []health.Status) bool {
+	for _, status := range statuses {
+		for key := range status.Metrics {
+			switch key {
+			case "drive.current_ratio",
+				"drive.current_peak_ratio",
+				"drive.current_a",
+				"drive.current_rms_a",
+				"drive.current_peak_a",
+				"drive.motor_temp_c",
+				"drive.driver_temp_c",
+				"drive.thermal_load_pct",
+				"drive.bus_voltage_v",
+				"drive.fault_code":
+				return true
+			}
 		}
 	}
 	return false

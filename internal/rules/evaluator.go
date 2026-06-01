@@ -50,7 +50,7 @@ func (e *Evaluator) Evaluate(observation health.Observation) health.Status {
 	switch observation.SourceType {
 	case "host":
 		return e.evaluateHost(status)
-	case "module":
+	case "module", "drive":
 		return e.evaluateModule(status, observation)
 	case "process":
 		return e.evaluateProcess(status)
@@ -144,9 +144,86 @@ func (e *Evaluator) evaluateModule(status health.Status, observation health.Obse
 	if severity, reason := e.evaluateModuleControlPeriod(&status, rules); severity != health.SeverityOK {
 		update(severity, reason)
 	}
+	for _, finding := range evaluateDriveDiagnostics(&status, rules) {
+		update(finding.severity, finding.reason)
+	}
 
 	status.Reason = strings.Join(reasons, "; ")
 	return status
+}
+
+type driveDiagnosticFinding struct {
+	severity health.Severity
+	reason   string
+}
+
+func evaluateDriveDiagnostics(status *health.Status, rules config.ModuleRules) []driveDiagnosticFinding {
+	if status == nil || len(status.Metrics) == 0 {
+		return nil
+	}
+	if currentLimit := metric(status.Metrics, "drive.current_limit_a"); currentLimit > 0 {
+		if _, ok := status.Metrics["drive.current_ratio"]; !ok {
+			if current := metric(status.Metrics, "drive.current_a"); current > 0 {
+				status.Metrics["drive.current_ratio"] = current / currentLimit
+			}
+		}
+		if peak := metric(status.Metrics, "drive.current_peak_a"); peak > 0 {
+			status.Metrics["drive.current_peak_ratio"] = peak / currentLimit
+		}
+	}
+
+	var findings []driveDiagnosticFinding
+	addHighThresholdFinding(&findings, metric(status.Metrics, "drive.current_ratio"), rules.DriveCurrentRatioWarn, rules.DriveCurrentRatioFail, "drive current ratio", "%.2f")
+	addHighThresholdFinding(&findings, metric(status.Metrics, "drive.current_peak_ratio"), rules.DriveCurrentRatioWarn, rules.DriveCurrentRatioFail, "drive peak current ratio", "%.2f")
+	addHighThresholdFinding(&findings, metric(status.Metrics, "drive.motor_temp_c"), rules.DriveMotorTempWarnC, rules.DriveMotorTempFailC, "drive motor temp", "%.1fC")
+	addHighThresholdFinding(&findings, metric(status.Metrics, "drive.driver_temp_c"), rules.DriveDriverTempWarnC, rules.DriveDriverTempFailC, "drive driver temp", "%.1fC")
+	addHighThresholdFinding(&findings, metric(status.Metrics, "drive.thermal_load_pct"), rules.DriveThermalLoadWarnPct, rules.DriveThermalLoadFailPct, "drive thermal load", "%.1f%%")
+	if busVoltage, ok := status.Metrics["drive.bus_voltage_v"]; ok {
+		addLowThresholdFinding(&findings, busVoltage, rules.DriveBusVoltageMinWarnV, rules.DriveBusVoltageMinFailV, "drive bus voltage", "%.1fV")
+	}
+
+	if rules.DriveFaultCodeFail {
+		if faultCode, ok := status.Metrics["drive.fault_code"]; ok && faultCode != 0 {
+			findings = append(findings, driveDiagnosticFinding{
+				severity: health.SeverityFail,
+				reason:   fmt.Sprintf("drive fault code %.0f != 0", faultCode),
+			})
+		}
+	}
+	return findings
+}
+
+func addHighThresholdFinding(findings *[]driveDiagnosticFinding, value, warn, fail float64, name, format string) {
+	if value == 0 {
+		return
+	}
+	switch {
+	case fail > 0 && value >= fail:
+		*findings = append(*findings, driveDiagnosticFinding{
+			severity: health.SeverityFail,
+			reason:   fmt.Sprintf(name+" "+format+" >= fail "+format, value, fail),
+		})
+	case warn > 0 && value >= warn:
+		*findings = append(*findings, driveDiagnosticFinding{
+			severity: health.SeverityWarn,
+			reason:   fmt.Sprintf(name+" "+format+" >= warn "+format, value, warn),
+		})
+	}
+}
+
+func addLowThresholdFinding(findings *[]driveDiagnosticFinding, value, warn, fail float64, name, format string) {
+	switch {
+	case fail > 0 && value <= fail:
+		*findings = append(*findings, driveDiagnosticFinding{
+			severity: health.SeverityFail,
+			reason:   fmt.Sprintf(name+" "+format+" <= fail "+format, value, fail),
+		})
+	case warn > 0 && value <= warn:
+		*findings = append(*findings, driveDiagnosticFinding{
+			severity: health.SeverityWarn,
+			reason:   fmt.Sprintf(name+" "+format+" <= warn "+format, value, warn),
+		})
+	}
 }
 
 func (e *Evaluator) evaluateModuleControlPeriod(status *health.Status, rules config.ModuleRules) (health.Severity, string) {

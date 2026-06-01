@@ -28,6 +28,7 @@ Current local action policy:
 
 - `warn` -> `notify`
 - `fail` or `stale` -> `degrade`
+- drive hardware `fail` from node-exported current/temp/fault diagnostics -> `safe_stop`
 - EtherCAT required link down or critical slave fault -> `safe_stop`
 - aggregate EtherCAT lost slave without topology -> `safe_stop`
 - recovery -> `resolve`
@@ -100,8 +101,10 @@ Edit these first:
 - `network.interfaces`
 - `power.supplies`
 - `can.interfaces`
-- `ethercat.masters`
-- `ethercat.masters[].slaves[]` with `criticality: critical|important|optional`
+- module report source IDs for robot main and drive diagnostics
+- drive metric thresholds under `rules.module`
+- optional `ethercat.masters` for platforms where watchdog probes fieldbus state directly
+- optional `ethercat.masters[].slaves[]` with `criticality: critical|important|optional`
 - `sources.time_sync.require_synchronized`
 - `sources.time_sync.sync_grace_period`
 
@@ -346,7 +349,8 @@ Local modules send one JSON datagram per heartbeat to `module.sock`.
 
 `source_id` is the stable component identity used for grouping health state,
 action latching, incident history, and metrics labels. Keep it stable for a
-given robot component, for example `<robot-id>.main` or `<robot-id>.ethercat`.
+given robot component, for example `<robot-id>.main`, `<robot-id>.drive.left_front_hip`,
+or `<robot-id>.ethercat`.
 
 Minimal example payload:
 
@@ -368,16 +372,23 @@ Minimal example payload:
 
 `source_type` is optional and defaults to `module`. Use a specific source type when
 a C++ process is reporting a subsystem that should use watchdog's built-in rules,
-for example `source_type: "ethercat"` with `ethercat.*` metrics. That lets the same
-ingest path drive watching, metrics reporting, and supervisor actions.
+for example `source_type: "drive"` with `drive.*` metrics or `source_type: "ethercat"`
+with `ethercat.*` metrics. When the main robot node owns realtime sensor/EtherCAT access,
+that ownership should stay in the robot node; watchdog consumes the node-exported diagnostics and
+applies operational policy.
 
 Module reports can also be evaluated by configured thresholds. For example,
 `rules.module.control_period_warn_us` and `rules.module.control_period_fail_us`
 promote a module to `warn` or `fail` when it reports `control_period_us` above
 those limits for enough consecutive watchdog polls. The default consecutive
 counts are `warn=3`, `fail=5`, and `recover=3` when timing thresholds are
-configured. A `fail` module maps to a supervisor `degrade` request through the
-default action recommendation path.
+configured.
+
+Drive diagnostics use the same module-report socket. If the robot node reports
+`drive.current_a`, `drive.current_limit_a`, `drive.motor_temp_c`,
+`drive.driver_temp_c`, `drive.thermal_load_pct`, `drive.bus_voltage_v`, or
+`drive.fault_code`, watchdog evaluates them under `rules.module`. A drive `warn`
+maps to `notify`; a drive `fail` maps to a supervisor `safe_stop` suggestion.
 
 C++ helper code is in:
 
@@ -394,6 +405,11 @@ target_link_libraries(robot_main PRIVATE watchdog::cpp)
 
 Protocol v1 fixtures for external producers and action receivers are in
 `sdk/cpp/fixtures/`.
+
+Drive and raw-log helper code is in:
+
+- `sdk/cpp/include/watchdog/reporter.hpp`
+- `sdk/cpp/include/watchdog/raw_log.hpp`
 
 SOEM helper code is in:
 

@@ -43,7 +43,33 @@ Useful artifacts:
 - a short map from node IDs to modules
 - one sample JSON payload if you want to use `command-json`
 
+## Node-Exported Drive Diagnostics
+
+For robot platforms where the main node owns the realtime EtherCAT cycle, watchdog should not become a second fieldbus master or duplicate high-rate PDO ownership. The preferred integration is:
+
+1. the robot node reads drive current, temperature, voltage, fault, and slave state from its normal realtime path
+2. the node exports low-rate `drive.*` diagnostics through the module-report socket
+3. optional C++ raw-log segments capture high-rate current/temperature timelines
+4. watchdog evaluates thresholds, writes incidents, links raw segments, and sends advisory actions
+
+Recommended metric keys:
+
+- `drive.current_a`
+- `drive.current_rms_a`
+- `drive.current_peak_a`
+- `drive.current_limit_a`
+- `drive.current_ratio`
+- `drive.motor_temp_c`
+- `drive.driver_temp_c`
+- `drive.thermal_load_pct`
+- `drive.bus_voltage_v`
+- `drive.fault_code`
+
+Use stable source IDs such as `robot.drive.left_front_hip` and labels such as `joint`, `slave_position`, and `drive_model`.
+
 ## EtherCAT
+
+The EtherCAT adapter remains useful for generic platforms and observe-only bus health. On platforms where the main robot node already detects slave loss, treat direct EtherCAT probing as optional and keep node-exported drive diagnostics as the primary path.
 
 The current config model assumes:
 
@@ -69,7 +95,7 @@ What is needed from the robot platform:
   expected slave count, slave names or positions, and any critical slaves that should be tracked separately
 - fault semantics:
   what should count as `warn` vs `fail`
-  examples: `SAFEOP`, working counter drop, slave missing, DC sync drift, link down
+  examples: drive over-current, motor/driver over-temp, drive fault code, bus voltage drop, `SAFEOP`, working counter drop, slave missing, DC sync drift, link down
 - observable sources:
   sample outputs or APIs that expose health
   examples: `ethercat master`, `ethercat slaves -v`, SOEM diagnostics, master logs, application diagnostics
@@ -87,11 +113,12 @@ Useful artifacts:
 
 For each real robot platform, the fastest useful handoff is:
 
-1. bus/backend type for CAN and EtherCAT
-2. sample command output or API payloads from a healthy system
-3. sample output from one failing case
-4. expected nodes/slaves and criticality
-5. the action policy for each failure mode
+1. whether drive diagnostics come from the robot node, a command-json bridge, or a direct bus adapter
+2. sample drive diagnostic payloads from a healthy system
+3. sample drive diagnostic payloads from one failing case
+4. bus/backend type for CAN and optional EtherCAT probing
+5. expected nodes/slaves and criticality when direct bus probing is used
+6. the action policy for each failure mode
 
 With that, the next implementation step is straightforward:
 

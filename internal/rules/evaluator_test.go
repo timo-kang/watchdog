@@ -182,6 +182,109 @@ func TestEvaluateModuleFailsAfterConsecutiveControlPeriodThreshold(t *testing.T)
 	}
 }
 
+func TestEvaluateDriveDiagnosticsFailsOnFaultCodeAndTemperature(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Module: config.ModuleRules{
+			DriveCurrentRatioWarn:   0.80,
+			DriveCurrentRatioFail:   1.00,
+			DriveMotorTempWarnC:     80,
+			DriveMotorTempFailC:     95,
+			DriveDriverTempWarnC:    80,
+			DriveDriverTempFailC:    95,
+			DriveThermalLoadWarnPct: 80,
+			DriveThermalLoadFailPct: 100,
+			DriveBusVoltageMinWarnV: 42,
+			DriveBusVoltageMinFailV: 36,
+			DriveFaultCodeFail:      true,
+		},
+	})
+	observation := health.Observation{
+		SourceID:         "robot.drive.left_front_hip",
+		SourceType:       "drive",
+		CollectedAt:      time.Now(),
+		ReportedSeverity: health.SeverityOK,
+		StaleAfter:       2 * time.Second,
+		Metrics: map[string]float64{
+			"drive.current_a":       32,
+			"drive.current_limit_a": 30,
+			"drive.motor_temp_c":    96,
+			"drive.fault_code":      17,
+		},
+		Labels: map[string]string{
+			"joint": "left_front_hip",
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+	if got := status.Metrics["drive.current_ratio"]; got <= 1.0 {
+		t.Fatalf("drive.current_ratio = %f, want > 1", got)
+	}
+	for _, want := range []string{
+		"drive current ratio 1.07 >= fail 1.00",
+		"drive motor temp 96.0C >= fail 95.0C",
+		"drive fault code 17 != 0",
+	} {
+		if !strings.Contains(status.Reason, want) {
+			t.Fatalf("reason %q missing %q", status.Reason, want)
+		}
+	}
+}
+
+func TestEvaluateDriveDiagnosticsWarnsOnLowBusVoltage(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Module: config.ModuleRules{
+			DriveBusVoltageMinWarnV: 42,
+			DriveBusVoltageMinFailV: 36,
+		},
+	})
+	observation := health.Observation{
+		SourceID:         "robot.drive.left_front_hip",
+		SourceType:       "module",
+		CollectedAt:      time.Now(),
+		ReportedSeverity: health.SeverityOK,
+		Metrics: map[string]float64{
+			"drive.bus_voltage_v": 40,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityWarn {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityWarn)
+	}
+	if !strings.Contains(status.Reason, "drive bus voltage 40.0V <= warn 42.0V") {
+		t.Fatalf("reason = %q", status.Reason)
+	}
+}
+
+func TestEvaluateDriveDiagnosticsFailsOnZeroBusVoltage(t *testing.T) {
+	evaluator := New(config.RulesConfig{
+		Module: config.ModuleRules{
+			DriveBusVoltageMinWarnV: 42,
+			DriveBusVoltageMinFailV: 36,
+		},
+	})
+	observation := health.Observation{
+		SourceID:         "robot.drive.left_front_hip",
+		SourceType:       "drive",
+		CollectedAt:      time.Now(),
+		ReportedSeverity: health.SeverityOK,
+		Metrics: map[string]float64{
+			"drive.bus_voltage_v": 0,
+		},
+	}
+
+	status := evaluator.Evaluate(observation)
+	if status.Severity != health.SeverityFail {
+		t.Fatalf("severity = %s, want %s", status.Severity, health.SeverityFail)
+	}
+	if !strings.Contains(status.Reason, "drive bus voltage 0.0V <= fail 36.0V") {
+		t.Fatalf("reason = %q", status.Reason)
+	}
+}
+
 func TestEvaluateReportedEtherCATMarksStale(t *testing.T) {
 	evaluator := New(config.RulesConfig{})
 	observation := health.Observation{

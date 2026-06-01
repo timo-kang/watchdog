@@ -17,8 +17,10 @@ The stable v1 fields are:
 - `metrics`: string-to-number map with finite values only
 - `labels`: string-to-string map for grouping and operator context
 
-Use `source_type: "ethercat"` with `ethercat.*` metrics when a C++ robot process
-is reporting fieldbus health through the module socket.
+Use `source_type: "drive"` with `drive.*` metrics when a C++ robot process
+is exporting node-owned current, temperature, voltage, or fault diagnostics.
+Use `source_type: "ethercat"` with `ethercat.*` metrics only when the process is
+reporting observe-only fieldbus health through the module socket.
 
 ## Raw Log Segments
 

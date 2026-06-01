@@ -106,6 +106,86 @@ func TestBuildRequestEtherCATCriticalSlaveFaultRequestsSafeStop(t *testing.T) {
 	}
 }
 
+func TestBuildRequestDriveFailRequestsSafeStop(t *testing.T) {
+	now := time.Now()
+	snapshot := health.Snapshot{
+		Hostname:    "robot-1",
+		CollectedAt: now,
+		Overall:     health.SeverityFail,
+		Statuses: []health.Status{
+			{
+				SourceID:   "robot.drive.left_front_hip",
+				SourceType: "drive",
+				Severity:   health.SeverityFail,
+				Reason:     "drive motor temp 96.0C >= fail 95.0C",
+				ObservedAt: now,
+				Metrics: map[string]float64{
+					"drive.motor_temp_c": 96,
+				},
+			},
+		},
+		Components: []health.ComponentStatus{
+			{
+				ComponentID: "robot.drive.left_front_hip",
+				Severity:    health.SeverityFail,
+				Reason:      "drive fail: drive motor temp 96.0C >= fail 95.0C",
+				ObservedAt:  now,
+				Sources: []health.ComponentSource{
+					{SourceType: "drive", Severity: health.SeverityFail, Reason: "drive motor temp 96.0C >= fail 95.0C", ObservedAt: now},
+				},
+			},
+		},
+	}
+
+	request, ok := BuildRequest(nil, snapshot, "/tmp/incident.json", true)
+	if !ok {
+		t.Fatal("expected request")
+	}
+	if request.RequestedAction != ActionSafeStop {
+		t.Fatalf("requested_action = %s, want %s", request.RequestedAction, ActionSafeStop)
+	}
+}
+
+func TestBuildRequestDriveWarnRequestsNotify(t *testing.T) {
+	now := time.Now()
+	snapshot := health.Snapshot{
+		Hostname:    "robot-1",
+		CollectedAt: now,
+		Overall:     health.SeverityWarn,
+		Statuses: []health.Status{
+			{
+				SourceID:   "robot.drive.left_front_hip",
+				SourceType: "module",
+				Severity:   health.SeverityWarn,
+				Reason:     "drive bus voltage 40.0V <= warn 42.0V",
+				ObservedAt: now,
+				Metrics: map[string]float64{
+					"drive.bus_voltage_v": 40,
+				},
+			},
+		},
+		Components: []health.ComponentStatus{
+			{
+				ComponentID: "robot.drive.left_front_hip",
+				Severity:    health.SeverityWarn,
+				Reason:      "module warn: drive bus voltage 40.0V <= warn 42.0V",
+				ObservedAt:  now,
+				Sources: []health.ComponentSource{
+					{SourceType: "module", Severity: health.SeverityWarn, Reason: "drive bus voltage 40.0V <= warn 42.0V", ObservedAt: now},
+				},
+			},
+		},
+	}
+
+	request, ok := BuildRequest(nil, snapshot, "", true)
+	if !ok {
+		t.Fatal("expected request")
+	}
+	if request.RequestedAction != ActionNotify {
+		t.Fatalf("requested_action = %s, want %s", request.RequestedAction, ActionNotify)
+	}
+}
+
 func TestBuildRequestEtherCATOptionalSlaveFaultRequestsNotify(t *testing.T) {
 	now := time.Now()
 	snapshot := health.Snapshot{

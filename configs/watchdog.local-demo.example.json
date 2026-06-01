@@ -83,7 +83,18 @@
       "control_period_fail_us": 5000,
       "control_period_warn_consecutive": 3,
       "control_period_fail_consecutive": 5,
-      "control_period_recover_consecutive": 3
+      "control_period_recover_consecutive": 3,
+      "drive_current_ratio_warn": 0.8,
+      "drive_current_ratio_fail": 1.0,
+      "drive_motor_temp_warn_c": 80,
+      "drive_motor_temp_fail_c": 95,
+      "drive_driver_temp_warn_c": 80,
+      "drive_driver_temp_fail_c": 95,
+      "drive_thermal_load_warn_pct": 80,
+      "drive_thermal_load_fail_pct": 100,
+      "drive_bus_voltage_min_warn_v": 42,
+      "drive_bus_voltage_min_fail_v": 36,
+      "drive_fault_code_fail": true
     },
     "process": {
       "restart_warn": 1,
