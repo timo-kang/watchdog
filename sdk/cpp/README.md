@@ -1,7 +1,7 @@
 # Watchdog C++ SDK
 
 Header-only C++ helpers for reporting robot module health to the local watchdog
-daemon.
+daemon and for writing raw log segment manifests.
 
 ## Protocol v1
 
@@ -19,6 +19,33 @@ The stable v1 fields are:
 
 Use `source_type: "ethercat"` with `ethercat.*` metrics when a C++ robot process
 is reporting fieldbus health through the module socket.
+
+## Raw Log Segments
+
+Use `watchdog::rawlog::SegmentWriter` when a robot process should write raw
+sensor or low-level diagnostic segments directly. It creates a segment file under
+`segments/YYYY-MM-DD/` and a manifest v1 JSON file under `manifests/`.
+
+```cpp
+#include "watchdog/raw_log.hpp"
+
+watchdog::rawlog::SegmentWriterOptions options;
+options.segment_dir = "/var/lib/watchdog/logs/segments";
+options.manifest_dir = "/var/lib/watchdog/logs/manifests";
+options.source_id = "imu.front";
+options.data_type = "imu";
+
+watchdog::rawlog::SegmentWriter writer(options);
+std::string error;
+if (writer.Open(&error)) {
+  writer.WriteLine("{\"seq\":1,\"ax\":0.01}", &error);
+  watchdog::rawlog::SegmentManifest manifest;
+  writer.Close(&manifest, &error);
+}
+```
+
+The writer is independent of the watchdog daemon. If watchdog is not installed
+or the module socket is absent, raw segment writing still works.
 
 Conformance fixtures:
 

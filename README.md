@@ -196,6 +196,8 @@ watchdog-log-agent \
 
 If the module socket is absent, segment writing continues and health reporting is
 skipped for that attempt. Watchdog remains optional for the producer path.
+For robot processes that should write segments directly, the C++ SDK provides
+`watchdog::rawlog::SegmentWriter` with the same manifest v1 contract.
 
 ## Prometheus and Grafana
 
@@ -461,7 +463,7 @@ What it already does well:
 - optional incident-to-raw-log index linking
 - standalone raw log segment producer
 - supervisor latching and audit
-- C++ heartbeat integration
+- C++ heartbeat and raw segment writer integration
 - baseline host, storage, time, network, power, CAN, and EtherCAT inputs
 
 What still belongs outside this repo:

@@ -31,6 +31,9 @@ if(WATCHDOG_CPP_BUILD_EXAMPLES)
 
   add_executable(watchdog_emit_soem_probe examples/emit_soem_probe.cpp)
   target_link_libraries(watchdog_emit_soem_probe PRIVATE watchdog::cpp)
+
+  add_executable(watchdog_write_raw_segment examples/write_raw_segment.cpp)
+  target_link_libraries(watchdog_write_raw_segment PRIVATE watchdog::cpp)
 endif()
 
 if(WATCHDOG_CPP_BUILD_TESTS)
@@ -43,6 +46,10 @@ if(WATCHDOG_CPP_BUILD_TESTS)
   add_executable(watchdog_ethercat_probe_test tests/ethercat_probe_test.cpp)
   target_link_libraries(watchdog_ethercat_probe_test PRIVATE watchdog::cpp)
   add_test(NAME watchdog_ethercat_probe_test COMMAND watchdog_ethercat_probe_test)
+
+  add_executable(watchdog_raw_log_test tests/raw_log_test.cpp)
+  target_link_libraries(watchdog_raw_log_test PRIVATE watchdog::cpp)
+  add_test(NAME watchdog_raw_log_test COMMAND watchdog_raw_log_test)
 endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
