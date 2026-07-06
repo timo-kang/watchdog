@@ -24,6 +24,7 @@ type Server struct {
 	cfg      Config
 	state    *Manager
 	observer *metrics.SupervisorCollector
+	dedup    *recentIDs
 }
 
 type AuditRecord struct {
@@ -63,6 +64,7 @@ func (s *Server) Run(ctx context.Context) error {
 	if err := os.MkdirAll(s.cfg.AuditDir, 0o755); err != nil {
 		return fmt.Errorf("create audit dir: %w", err)
 	}
+	s.dedup = seedRecentIDs(s.cfg.AuditDir, 2048)
 	if s.cfg.LatestPath != "" {
 		if err := os.MkdirAll(filepath.Dir(s.cfg.LatestPath), 0o755); err != nil {
 			return fmt.Errorf("create latest dir: %w", err)
@@ -149,14 +151,12 @@ func (s *Server) handlePayload(ctx context.Context, payload []byte) error {
 	}
 
 	recordPath := filepath.Join(s.cfg.AuditDir, request.RequestID+".json")
-	if _, err := os.Stat(recordPath); err == nil {
+	if s.dedup.seen(request.RequestID) {
 		if s.observer != nil {
 			s.observer.ObserveRequest(request, "duplicate")
 		}
 		s.logger.Printf("duplicate request_id=%s action=%s", request.RequestID, request.RequestedAction)
 		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat audit record: %w", err)
 	}
 
 	decision, err := s.state.Apply(request)
@@ -183,6 +183,7 @@ func (s *Server) handlePayload(ctx context.Context, payload []byte) error {
 	if writeErr := writeJSONDurable(recordPath, record); writeErr != nil {
 		return writeErr
 	}
+	s.dedup.add(request.RequestID)
 	if s.cfg.LatestPath != "" {
 		if writeErr := writeJSONAtomic(s.cfg.LatestPath, record); writeErr != nil {
 			return writeErr
