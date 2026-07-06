@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go build, vet & test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt (check formatting)
+        run: |
+          unformatted="$(gofmt -l $(git ls-files '*.go'))"
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Build (native amd64)
+        run: go build ./...
+
+      - name: Cross-compile (linux/arm64)
+        env:
+          GOOS: linux
+          GOARCH: arm64
+        run: go build ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  cpp:
+    name: C++ SDK build & ctest
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (SDK with tests)
+        run: >
+          cmake -S sdk/cpp -B build/sdk-cpp
+          -DWATCHDOG_CPP_BUILD_TESTS=ON
+          -DWATCHDOG_CPP_BUILD_EXAMPLES=ON
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/sdk-cpp --parallel
+
+      - name: Test
+        run: ctest --test-dir build/sdk-cpp --output-on-failure

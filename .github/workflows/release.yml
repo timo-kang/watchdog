@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build release tarballs
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The tag name is controlled input; bind it to an env var and quote all
+      # uses so it never lands unescaped inside a shell command.
+      - name: Resolve version and target
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$TAG_NAME" in
+            v*) : ;;
+            *) echo "tag '$TAG_NAME' does not start with v"; exit 1 ;;
+          esac
+          echo "VERSION=$TAG_NAME" >> "$GITHUB_ENV"
+          echo "TARGET=watchdog-${TAG_NAME}-ubuntu24-${{ matrix.arch }}" >> "$GITHUB_ENV"
+
+      - name: Build binaries
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          out="dist/${TARGET}"
+          mkdir -p "${out}/bin" "${out}/configs" "${out}/systemd"
+          for cmd in watchdog watchdog-supervisor watchdogctl watchdog-log-agent; do
+            go build -trimpath -ldflags "-s -w" -o "${out}/bin/${cmd}" "./cmd/${cmd}"
+          done
+
+      - name: Assemble config, systemd units, and docs
+        run: |
+          set -euo pipefail
+          out="dist/${TARGET}"
+          # ubuntu24 baseline configs shipped under the documented install names.
+          cp configs/watchdog.ubuntu24-amd64.json "${out}/configs/watchdog.json"
+          cp configs/watchdog-supervisor.ubuntu24-amd64.json "${out}/configs/watchdog-supervisor.json"
+          cp deploy/systemd/watchdog.service "${out}/systemd/watchdog.service"
+          cp deploy/systemd/watchdog-supervisor.service "${out}/systemd/watchdog-supervisor.service"
+          cp LICENSE NOTICE README.md "${out}/"
+
+      - name: Package tarball + checksum
+        run: |
+          set -euo pipefail
+          tar -C dist -czf "dist/${TARGET}.tar.gz" "${TARGET}"
+          ( cd dist && sha256sum "${TARGET}.tar.gz" > "${TARGET}.tar.gz.sha256" )
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TARGET }}
+          path: |
+            dist/${{ env.TARGET }}.tar.gz
+            dist/${{ env.TARGET }}.tar.gz.sha256
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        # Third-party action pinned to an immutable commit SHA (tags are mutable).
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
