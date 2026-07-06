@@ -88,7 +88,7 @@ func TestMaybeWriteUsesAtomicTempRename(t *testing.T) {
 		t.Fatalf("overall = %s, want warn", decoded.Overall)
 	}
 
-	matches, err := filepath.Glob(filepath.Join(dir, ".incident-*.tmp"))
+	matches, err := filepath.Glob(filepath.Join(dir, "*.tmp"))
 	if err != nil {
 		t.Fatalf("glob temp incidents: %v", err)
 	}
