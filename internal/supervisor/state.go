@@ -83,7 +83,7 @@ func LoadManager(path string, cooldowns CooldownConfig) (*Manager, error) {
 }
 
 func (m *Manager) Write() error {
-	return writeJSONFile(m.path, m.state)
+	return writeJSONAtomic(m.path, m.state)
 }
 
 func (m *Manager) Snapshot() State {

@@ -54,7 +54,7 @@ func (s *Server) writeShadowFSMRequest(request actions.Request, decision ApplyRe
 	robotRequest := buildRobotFSMRequest(request, decision)
 	path := filepath.Join(s.cfg.ShadowFSM.RequestDir, request.RequestID+".json")
 	result.Path = path
-	if err := writeJSONFile(path, robotRequest); err != nil {
+	if err := writeJSONDurable(path, robotRequest); err != nil {
 		result.Error = err.Error()
 		return result
 	}
@@ -62,7 +62,7 @@ func (s *Server) writeShadowFSMRequest(request actions.Request, decision ApplyRe
 
 	if s.cfg.ShadowFSM.LatestPath != "" {
 		result.LatestPath = s.cfg.ShadowFSM.LatestPath
-		if err := writeJSONFile(s.cfg.ShadowFSM.LatestPath, robotRequest); err != nil {
+		if err := writeJSONAtomic(s.cfg.ShadowFSM.LatestPath, robotRequest); err != nil {
 			result.Error = err.Error()
 			return result
 		}

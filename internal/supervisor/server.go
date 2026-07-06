@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"watchdog/internal/actions"
+	"watchdog/internal/atomicwrite"
 	"watchdog/internal/metrics"
 )
 
@@ -179,11 +180,11 @@ func (s *Server) handlePayload(ctx context.Context, payload []byte) error {
 		ShadowFSM:  shadowResult,
 		Hook:       result,
 	}
-	if writeErr := writeJSONFile(recordPath, record); writeErr != nil {
+	if writeErr := writeJSONDurable(recordPath, record); writeErr != nil {
 		return writeErr
 	}
 	if s.cfg.LatestPath != "" {
-		if writeErr := writeJSONFile(s.cfg.LatestPath, record); writeErr != nil {
+		if writeErr := writeJSONAtomic(s.cfg.LatestPath, record); writeErr != nil {
 			return writeErr
 		}
 	}
@@ -325,19 +326,20 @@ func removeStaleSocket(path string) error {
 	return nil
 }
 
-func writeJSONFile(path string, value any) error {
+func writeJSONDurable(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal json file: %w", err)
 	}
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		return fmt.Errorf("write json temp file: %w", err)
+	return atomicwrite.WriteDurable(path, data, 0o644)
+}
+
+func writeJSONAtomic(path string, value any) error {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal json file: %w", err)
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("rename json file: %w", err)
-	}
-	return nil
+	return atomicwrite.WriteAtomic(path, data, 0o644)
 }
 
 func componentIDs(components []actions.ComponentRequest) []string {
