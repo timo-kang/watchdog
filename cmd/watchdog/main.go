@@ -88,7 +88,7 @@ func main() {
 		actions.NewTransitionLogger(logger, cfg.LogTransitionsOnly),
 		buildSocketSink(cfg),
 	)
-	daemon := app.New(logger, cfg.PollInterval, collectors, evaluator, incidentWriter, rawLogLinker, actionSink, watchdogMetrics)
+	daemon := app.New(logger, cfg.PollInterval, collectors, evaluator, incidentWriter, rawLogLinker, actionSink, watchdogMetrics, cfg.IncidentDir, cfg.Retention.SweepInterval, cfg.Retention.Incidents)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()

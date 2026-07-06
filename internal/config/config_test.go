@@ -786,6 +786,38 @@ func TestLoadRejectsInvalidModuleRuleOrder(t *testing.T) {
 	}
 }
 
+func TestLoadConfigDefaultsIncidentRetention(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "watchdog.json")
+	data := `{
+		"poll_interval": "2s",
+		"incident_dir": "./var/incidents",
+		"sources": {
+			"host": {"enabled": false},
+			"module_reports": {
+				"enabled": false,
+				"socket_path": "./var/run/watchdog/module.sock",
+				"max_message_bytes": 4096,
+				"default_stale_after": "5s"
+			}
+		},
+		"rules": {}
+	}`
+	if err := os.WriteFile(configPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.Retention.Incidents.MaxFiles != 1000 || cfg.Retention.Incidents.MinKeep != 50 {
+		t.Fatalf("incident retention defaults wrong: %+v", cfg.Retention.Incidents)
+	}
+	if cfg.Retention.SweepInterval != time.Minute {
+		t.Fatalf("SweepInterval = %v, want 1m", cfg.Retention.SweepInterval)
+	}
+}
+
 func TestLoadParsesMetricsEndpoint(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "watchdog.json")
 	data := `{

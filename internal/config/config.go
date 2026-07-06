@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"watchdog/internal/metrics"
+	"watchdog/internal/retention"
 )
 
 type Config struct {
@@ -19,17 +20,37 @@ type Config struct {
 	Actions            ActionsConfig
 	Sources            SourcesConfig
 	Rules              RulesConfig
+	Retention          WatchdogRetentionConfig
 }
 
 type fileConfig struct {
-	PollInterval       string                 `json:"poll_interval"`
-	IncidentDir        string                 `json:"incident_dir"`
-	LogTransitionsOnly bool                   `json:"log_transitions_only"`
-	Metrics            metrics.EndpointConfig `json:"metrics"`
-	RawLogs            fileRawLogsConfig      `json:"raw_logs"`
-	Actions            ActionsConfig          `json:"actions"`
-	Sources            fileSources            `json:"sources"`
-	Rules              RulesConfig            `json:"rules"`
+	PollInterval       string                      `json:"poll_interval"`
+	IncidentDir        string                      `json:"incident_dir"`
+	LogTransitionsOnly bool                        `json:"log_transitions_only"`
+	Metrics            metrics.EndpointConfig      `json:"metrics"`
+	RawLogs            fileRawLogsConfig           `json:"raw_logs"`
+	Actions            ActionsConfig               `json:"actions"`
+	Sources            fileSources                 `json:"sources"`
+	Rules              RulesConfig                 `json:"rules"`
+	Retention          fileWatchdogRetentionConfig `json:"retention"`
+}
+
+// WatchdogRetentionConfig bounds the daemon's incident directory. A zero
+// max_files/max_bytes disables that particular limit.
+type WatchdogRetentionConfig struct {
+	SweepInterval time.Duration
+	Incidents     retention.Policy
+}
+
+type fileWatchdogRetentionConfig struct {
+	SweepInterval string                   `json:"sweep_interval"`
+	Incidents     fileIncidentPolicyConfig `json:"incidents"`
+}
+
+type fileIncidentPolicyConfig struct {
+	MaxFiles int    `json:"max_files"`
+	MaxBytes string `json:"max_bytes"`
+	MinKeep  int    `json:"min_keep"`
 }
 
 type RawLogsConfig struct {
@@ -471,6 +492,10 @@ func Load(path string) (Config, error) {
 				RTCDeltaFailS: 120,
 			},
 		},
+		Retention: fileWatchdogRetentionConfig{
+			SweepInterval: "60s",
+			Incidents:     fileIncidentPolicyConfig{MaxFiles: 1000, MaxBytes: "64Mi", MinKeep: 50},
+		},
 	}
 
 	data, err := os.ReadFile(path)
@@ -725,6 +750,11 @@ func Load(path string) (Config, error) {
 		sources.TimeSync.SourceID = "system-clock"
 	}
 
+	retentionCfg, err := parseWatchdogRetention(raw.Retention)
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		PollInterval:       interval,
 		IncidentDir:        raw.IncidentDir,
@@ -734,7 +764,31 @@ func Load(path string) (Config, error) {
 		Actions:            raw.Actions,
 		Sources:            sources,
 		Rules:              raw.Rules,
+		Retention:          retentionCfg,
 	}, nil
+}
+
+func parseWatchdogRetention(raw fileWatchdogRetentionConfig) (WatchdogRetentionConfig, error) {
+	interval, err := time.ParseDuration(nonEmptyOr(raw.SweepInterval, "60s"))
+	if err != nil {
+		return WatchdogRetentionConfig{}, fmt.Errorf("parse retention.sweep_interval: %w", err)
+	}
+	if interval <= 0 {
+		return WatchdogRetentionConfig{}, fmt.Errorf("retention.sweep_interval must be positive")
+	}
+	incidents, err := parseIncidentPolicy(raw.Incidents)
+	if err != nil {
+		return WatchdogRetentionConfig{}, fmt.Errorf("retention.incidents: %w", err)
+	}
+	return WatchdogRetentionConfig{SweepInterval: interval, Incidents: incidents}, nil
+}
+
+func parseIncidentPolicy(raw fileIncidentPolicyConfig) (retention.Policy, error) {
+	maxBytes, err := retention.ParseByteSize(raw.MaxBytes)
+	if err != nil {
+		return retention.Policy{}, err
+	}
+	return retention.Policy{MaxBytes: maxBytes, MaxFiles: raw.MaxFiles, MinKeep: raw.MinKeep}, nil
 }
 
 func nonEmptyOr(value, fallback string) string {
