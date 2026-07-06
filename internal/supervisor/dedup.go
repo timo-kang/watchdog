@@ -46,6 +46,9 @@ func (r *recentIDs) add(id string) {
 // seedRecentIDs loads the newest audit request IDs (filename without .json) so
 // duplicate suppression survives a restart even as retention prunes old files.
 func seedRecentIDs(auditDir string, capacity int) *recentIDs {
+	if capacity < 1 {
+		capacity = 1
+	}
 	r := newRecentIDs(capacity)
 	entries, err := os.ReadDir(auditDir)
 	if err != nil {

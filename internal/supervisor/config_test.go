@@ -7,6 +7,27 @@ import (
 	"time"
 )
 
+func TestLoadConfigDefaultsRetention(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "supervisor.json")
+	if err := os.WriteFile(path, []byte(`{"socket_path":"/x.sock","audit_dir":"/a","state_path":"/s.json"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.DedupCacheSize != 2048 {
+		t.Fatalf("DedupCacheSize = %d, want 2048", cfg.DedupCacheSize)
+	}
+	if cfg.Retention.Audit.MaxFiles != 5000 || cfg.Retention.Audit.MinKeep != 100 {
+		t.Fatalf("audit retention defaults wrong: %+v", cfg.Retention.Audit)
+	}
+	if cfg.Retention.SweepInterval != time.Minute {
+		t.Fatalf("SweepInterval = %v, want 1m", cfg.Retention.SweepInterval)
+	}
+}
+
 func TestLoadConfigParsesStateAndCooldowns(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "supervisor.json")
 	content := `{

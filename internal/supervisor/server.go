@@ -17,6 +17,7 @@ import (
 	"watchdog/internal/actions"
 	"watchdog/internal/atomicwrite"
 	"watchdog/internal/metrics"
+	"watchdog/internal/retention"
 )
 
 type Server struct {
@@ -64,7 +65,7 @@ func (s *Server) Run(ctx context.Context) error {
 	if err := os.MkdirAll(s.cfg.AuditDir, 0o755); err != nil {
 		return fmt.Errorf("create audit dir: %w", err)
 	}
-	s.dedup = seedRecentIDs(s.cfg.AuditDir, 2048)
+	s.dedup = seedRecentIDs(s.cfg.AuditDir, s.cfg.DedupCacheSize)
 	if s.cfg.LatestPath != "" {
 		if err := os.MkdirAll(filepath.Dir(s.cfg.LatestPath), 0o755); err != nil {
 			return fmt.Errorf("create latest dir: %w", err)
@@ -95,6 +96,14 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.observer != nil {
 		s.observer.ObserveState(supervisorStateView(state.Snapshot()))
 	}
+
+	matchJSON := func(name string) bool { return strings.HasSuffix(name, ".json") }
+	targets := []retention.Target{{Dir: s.cfg.AuditDir, Match: matchJSON, Policy: s.cfg.Retention.Audit}}
+	if s.cfg.ShadowFSM.Enabled && s.cfg.ShadowFSM.RequestDir != "" {
+		targets = append(targets, retention.Target{Dir: s.cfg.ShadowFSM.RequestDir, Match: matchJSON, Policy: s.cfg.Retention.Shadow})
+	}
+	sweeper := retention.NewSweeper(s.logger, s.cfg.Retention.SweepInterval, targets...)
+	go sweeper.Run(ctx)
 
 	if err := removeStaleSocket(s.cfg.SocketPath); err != nil {
 		return err
