@@ -70,7 +70,7 @@ func write(path string, data []byte, mode os.FileMode, durable bool) error {
 }
 
 // fsyncDir fsyncs a directory so a rename is durable. Filesystems that do not
-// support directory fsync report EINVAL/ENOTSUP; those are treated as success.
+// support directory fsync report EINVAL/ErrUnsupported; those are treated as success.
 func fsyncDir(dir string) error {
 	d, err := os.Open(dir)
 	if err != nil {
@@ -78,7 +78,7 @@ func fsyncDir(dir string) error {
 	}
 	defer d.Close()
 	if err := d.Sync(); err != nil {
-		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOTSUP) {
+		if errors.Is(err, syscall.EINVAL) || errors.Is(err, errors.ErrUnsupported) {
 			return nil
 		}
 		return err

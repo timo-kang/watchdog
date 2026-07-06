@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,7 +67,7 @@ func Prune(dir string, match func(name string) bool, p Policy) (int, error) {
 		if !overCount && !overBytes {
 			break
 		}
-		if err := os.Remove(dir + "/" + files[i].name); err != nil {
+		if err := os.Remove(filepath.Join(dir, files[i].name)); err != nil {
 			errs = append(errs, err)
 			continue
 		}

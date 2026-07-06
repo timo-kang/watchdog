@@ -818,6 +818,36 @@ func TestLoadConfigDefaultsIncidentRetention(t *testing.T) {
 	}
 }
 
+func TestParseIncidentPolicyRejectsNegativeLimits(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  fileIncidentPolicyConfig
+		want string
+	}{
+		{
+			name: "max files",
+			raw:  fileIncidentPolicyConfig{MaxFiles: -1},
+			want: "max_files must not be negative",
+		},
+		{
+			name: "min keep",
+			raw:  fileIncidentPolicyConfig{MinKeep: -1},
+			want: "min_keep must not be negative",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseIncidentPolicy(tt.raw)
+			if err == nil {
+				t.Fatal("parseIncidentPolicy unexpectedly succeeded")
+			}
+			if err.Error() != tt.want {
+				t.Fatalf("error = %q, want %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadParsesMetricsEndpoint(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "watchdog.json")
 	data := `{

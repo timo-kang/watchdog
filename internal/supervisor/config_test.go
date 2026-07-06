@@ -110,6 +110,36 @@ func TestLoadConfigRejectsNonPositiveSweepInterval(t *testing.T) {
 	}
 }
 
+func TestParsePolicyRejectsNegativeLimits(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  filePolicyConfig
+		want string
+	}{
+		{
+			name: "max files",
+			raw:  filePolicyConfig{MaxFiles: -1},
+			want: "max_files must not be negative",
+		},
+		{
+			name: "min keep",
+			raw:  filePolicyConfig{MinKeep: -1},
+			want: "min_keep must not be negative",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parsePolicy(tt.raw)
+			if err == nil {
+				t.Fatal("parsePolicy unexpectedly succeeded")
+			}
+			if err.Error() != tt.want {
+				t.Fatalf("error = %q, want %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadConfigClampsDedupCacheToAuditMaxFiles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "supervisor.json")
 	content := `{

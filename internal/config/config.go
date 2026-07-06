@@ -784,6 +784,12 @@ func parseWatchdogRetention(raw fileWatchdogRetentionConfig) (WatchdogRetentionC
 }
 
 func parseIncidentPolicy(raw fileIncidentPolicyConfig) (retention.Policy, error) {
+	if raw.MaxFiles < 0 {
+		return retention.Policy{}, fmt.Errorf("max_files must not be negative")
+	}
+	if raw.MinKeep < 0 {
+		return retention.Policy{}, fmt.Errorf("min_keep must not be negative")
+	}
 	maxBytes, err := retention.ParseByteSize(raw.MaxBytes)
 	if err != nil {
 		return retention.Policy{}, err
