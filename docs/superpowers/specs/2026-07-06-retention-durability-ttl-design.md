@@ -1,7 +1,7 @@
 # Retention, Durability & TTL — Design Spec
 
 - Date: 2026-07-06
-- Status: Approved (brainstorming), pending implementation plan
+- Status: Implemented
 - Area: `internal/supervisor`, `internal/incident`, `internal/adapters/module`, `internal/metrics`, new `internal/atomicwrite`, new `internal/retention`
 
 ## Problem

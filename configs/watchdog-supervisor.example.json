@@ -3,6 +3,20 @@
   "audit_dir": "./var/lib/watchdog/supervisor/requests",
   "latest_path": "./var/lib/watchdog/supervisor/latest.json",
   "state_path": "./var/lib/watchdog/supervisor/current_state.json",
+  "dedup_cache_size": 2048,
+  "retention": {
+    "sweep_interval": "60s",
+    "audit": {
+      "max_files": 5000,
+      "max_bytes": "64Mi",
+      "min_keep": 100
+    },
+    "shadow": {
+      "max_files": 1000,
+      "max_bytes": "32Mi",
+      "min_keep": 50
+    }
+  },
   "metrics": {
     "enabled": true,
     "listen_address": "127.0.0.1:9109",
