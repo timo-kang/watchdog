@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"watchdog/internal/actions"
+	"watchdog/internal/atomicwrite"
 	"watchdog/internal/metrics"
+	"watchdog/internal/retention"
 )
 
 type Server struct {
@@ -23,6 +25,7 @@ type Server struct {
 	cfg      Config
 	state    *Manager
 	observer *metrics.SupervisorCollector
+	dedup    *recentIDs
 }
 
 type AuditRecord struct {
@@ -62,6 +65,7 @@ func (s *Server) Run(ctx context.Context) error {
 	if err := os.MkdirAll(s.cfg.AuditDir, 0o755); err != nil {
 		return fmt.Errorf("create audit dir: %w", err)
 	}
+	s.dedup = seedRecentIDs(s.cfg.AuditDir, s.cfg.DedupCacheSize)
 	if s.cfg.LatestPath != "" {
 		if err := os.MkdirAll(filepath.Dir(s.cfg.LatestPath), 0o755); err != nil {
 			return fmt.Errorf("create latest dir: %w", err)
@@ -92,6 +96,14 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.observer != nil {
 		s.observer.ObserveState(supervisorStateView(state.Snapshot()))
 	}
+
+	matchJSON := func(name string) bool { return strings.HasSuffix(name, ".json") }
+	targets := []retention.Target{{Dir: s.cfg.AuditDir, Match: matchJSON, Policy: s.cfg.Retention.Audit}}
+	if s.cfg.ShadowFSM.Enabled && s.cfg.ShadowFSM.RequestDir != "" {
+		targets = append(targets, retention.Target{Dir: s.cfg.ShadowFSM.RequestDir, Match: matchJSON, Policy: s.cfg.Retention.Shadow})
+	}
+	sweeper := retention.NewSweeper(s.logger, s.cfg.Retention.SweepInterval, targets...)
+	go sweeper.Run(ctx)
 
 	if err := removeStaleSocket(s.cfg.SocketPath); err != nil {
 		return err
@@ -148,14 +160,12 @@ func (s *Server) handlePayload(ctx context.Context, payload []byte) error {
 	}
 
 	recordPath := filepath.Join(s.cfg.AuditDir, request.RequestID+".json")
-	if _, err := os.Stat(recordPath); err == nil {
+	if s.dedup.seen(request.RequestID) {
 		if s.observer != nil {
 			s.observer.ObserveRequest(request, "duplicate")
 		}
 		s.logger.Printf("duplicate request_id=%s action=%s", request.RequestID, request.RequestedAction)
 		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat audit record: %w", err)
 	}
 
 	decision, err := s.state.Apply(request)
@@ -179,11 +189,12 @@ func (s *Server) handlePayload(ctx context.Context, payload []byte) error {
 		ShadowFSM:  shadowResult,
 		Hook:       result,
 	}
-	if writeErr := writeJSONFile(recordPath, record); writeErr != nil {
+	if writeErr := writeJSONDurable(recordPath, record); writeErr != nil {
 		return writeErr
 	}
+	s.dedup.add(request.RequestID)
 	if s.cfg.LatestPath != "" {
-		if writeErr := writeJSONFile(s.cfg.LatestPath, record); writeErr != nil {
+		if writeErr := writeJSONAtomic(s.cfg.LatestPath, record); writeErr != nil {
 			return writeErr
 		}
 	}
@@ -325,19 +336,20 @@ func removeStaleSocket(path string) error {
 	return nil
 }
 
-func writeJSONFile(path string, value any) error {
+func writeJSONDurable(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal json file: %w", err)
 	}
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		return fmt.Errorf("write json temp file: %w", err)
+	return atomicwrite.WriteDurable(path, data, 0o644)
+}
+
+func writeJSONAtomic(path string, value any) error {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal json file: %w", err)
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("rename json file: %w", err)
-	}
-	return nil
+	return atomicwrite.WriteAtomic(path, data, 0o644)
 }
 
 func componentIDs(components []actions.ComponentRequest) []string {

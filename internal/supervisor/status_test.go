@@ -45,8 +45,8 @@ func TestLoadStatusReadsStateAndLatest(t *testing.T) {
 		},
 		ReceivedAt: time.Date(2026, 4, 16, 12, 0, 0, 0, time.UTC),
 	}
-	if err := writeJSONFile(latestPath, record); err != nil {
-		t.Fatalf("writeJSONFile: %v", err)
+	if err := writeJSONAtomic(latestPath, record); err != nil {
+		t.Fatalf("writeJSONAtomic: %v", err)
 	}
 
 	status, err := LoadStatus(statePath, latestPath)

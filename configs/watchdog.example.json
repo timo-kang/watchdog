@@ -2,6 +2,14 @@
   "poll_interval": "2s",
   "incident_dir": "./var/incidents",
   "log_transitions_only": true,
+  "retention": {
+    "sweep_interval": "60s",
+    "incidents": {
+      "max_files": 1000,
+      "max_bytes": "64Mi",
+      "min_keep": 50
+    }
+  },
   "metrics": {
     "enabled": true,
     "listen_address": "127.0.0.1:9108",
@@ -31,7 +39,8 @@
       "enabled": true,
       "socket_path": "./var/run/watchdog/module.sock",
       "max_message_bytes": 4096,
-      "default_stale_after": "5s"
+      "default_stale_after": "5s",
+      "report_ttl": "15m"
     },
     "systemd": {
       "enabled": false,

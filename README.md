@@ -130,6 +130,59 @@ Persistent state and incidents:
 - `/var/lib/watchdog/supervisor/latest.json`
 - `/var/lib/watchdog/supervisor/requests/`
 
+### Retention & Durability
+
+Forensic writes are power-loss durable. Incident snapshots, supervisor audit
+records, and shadow-FSM request records are written with an `fsync` of both the
+file and its parent directory, so completed evidence survives a power cut - the
+canonical robot incident. The high-churn mirrors (`latest.json`,
+`current_state.json`, shadow `latest.json`) use crash-safe atomic renames
+without fsync, since they are always reconstructable.
+
+Persistent directories are bounded so watchdog never fills the device it is
+meant to protect. A background sweeper (default every `60s`) prunes the audit,
+incident, and shadow-request dirs to a byte budget and file-count cap, always
+retaining the newest `min_keep` files regardless. Pruning runs off the
+health/action path and never blocks it.
+
+Idle module report sources are evicted from memory and from `/metrics` after
+`report_ttl` (default `15m`) with no new heartbeat, so churned `source_id`s do
+not grow memory or metric cardinality without bound.
+
+Set `dedup_cache_size` on the supervisor to bound the in-memory recent-request
+window used for duplicate suppression; keep it at or below `retention.audit.max_files`
+so a restart reseed covers the full window. Retention and TTL are optional and
+backward compatible: any `max_files`/`max_bytes` of `0`, or `report_ttl` of `0`,
+disables that limit and reproduces the previous unbounded behavior.
+
+**Upgrade note:** after upgrading, a deployment with no `retention` block does
+*not* stay unbounded - it enforces the bounded defaults on first restart.
+Incident, audit, and shadow-request files beyond the budget are pruned
+oldest-first, and idle module report sources are evicted after `report_ttl`
+(default `15m`). To keep the old unbounded behavior, set `max_files: 0` and
+`max_bytes: 0` (and `report_ttl: 0`) explicitly.
+
+Example supervisor config:
+
+```json
+"dedup_cache_size": 2048,
+"retention": {
+  "sweep_interval": "60s",
+  "audit":  { "max_files": 5000, "max_bytes": "64Mi", "min_keep": 100 },
+  "shadow": { "max_files": 1000, "max_bytes": "32Mi", "min_keep": 50 }
+}
+```
+
+Example watchdog config:
+
+```json
+"retention": {
+  "sweep_interval": "60s",
+  "incidents": { "max_files": 1000, "max_bytes": "64Mi", "min_keep": 50 }
+},
+"sources": { "module_reports": { "report_ttl": "15m" } }
+```
+
 Service logs:
 
 - `journalctl -u watchdog`

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"watchdog/internal/atomicwrite"
 	"watchdog/internal/health"
 )
 
@@ -38,28 +39,8 @@ func (w *Writer) MaybeWrite(previous *health.Snapshot, next health.Snapshot) (st
 	if err != nil {
 		return "", fmt.Errorf("marshal incident: %w", err)
 	}
-
-	temp, err := os.CreateTemp(w.dir, ".incident-*.tmp")
-	if err != nil {
-		return "", fmt.Errorf("create temp incident: %w", err)
-	}
-	tempPath := temp.Name()
-	defer func() {
-		_ = os.Remove(tempPath)
-	}()
-	if _, err := temp.Write(data); err != nil {
-		_ = temp.Close()
-		return "", fmt.Errorf("write temp incident: %w", err)
-	}
-	if err := temp.Chmod(0o644); err != nil {
-		_ = temp.Close()
-		return "", fmt.Errorf("chmod temp incident: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		return "", fmt.Errorf("close temp incident: %w", err)
-	}
-	if err := os.Rename(tempPath, path); err != nil {
-		return "", fmt.Errorf("rename incident: %w", err)
+	if err := atomicwrite.WriteDurable(path, data, 0o644); err != nil {
+		return "", fmt.Errorf("write incident: %w", err)
 	}
 	return path, nil
 }

@@ -37,6 +37,7 @@ type reportState struct {
 	sourceID    string
 	sourceType  string
 	collectedAt time.Time
+	receivedAt  time.Time
 	severity    health.Severity
 	reason      string
 	metrics     map[string]float64
@@ -120,6 +121,17 @@ func (c *Collector) Stop(context.Context) error {
 }
 
 func (c *Collector) Collect(context.Context) ([]health.Observation, error) {
+	if c.cfg.ReportTTL > 0 {
+		cutoff := time.Now().Add(-c.cfg.ReportTTL)
+		c.mu.Lock()
+		for id, st := range c.reports {
+			if st.receivedAt.Before(cutoff) {
+				delete(c.reports, id)
+			}
+		}
+		c.mu.Unlock()
+	}
+
 	c.mu.RLock()
 	conn := c.conn
 	states := make(map[string]reportState, len(c.reports))
@@ -193,6 +205,8 @@ func (c *Collector) readLoop(ctx context.Context, conn *net.UnixConn) {
 		if err != nil {
 			continue
 		}
+
+		report.receivedAt = time.Now()
 
 		c.mu.Lock()
 		c.reports[report.sourceID] = report

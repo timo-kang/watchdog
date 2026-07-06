@@ -7,6 +7,27 @@ import (
 	"time"
 )
 
+func TestLoadConfigDefaultsRetention(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "supervisor.json")
+	if err := os.WriteFile(path, []byte(`{"socket_path":"/x.sock","audit_dir":"/a","state_path":"/s.json"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.DedupCacheSize != 2048 {
+		t.Fatalf("DedupCacheSize = %d, want 2048", cfg.DedupCacheSize)
+	}
+	if cfg.Retention.Audit.MaxFiles != 5000 || cfg.Retention.Audit.MinKeep != 100 {
+		t.Fatalf("audit retention defaults wrong: %+v", cfg.Retention.Audit)
+	}
+	if cfg.Retention.SweepInterval != time.Minute {
+		t.Fatalf("SweepInterval = %v, want 1m", cfg.Retention.SweepInterval)
+	}
+}
+
 func TestLoadConfigParsesStateAndCooldowns(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "supervisor.json")
 	content := `{
@@ -66,6 +87,82 @@ func TestLoadConfigParsesStateAndCooldowns(t *testing.T) {
 		cfg.Cooldowns.SafeStop != 33*time.Second ||
 		cfg.Cooldowns.Resolve != 44*time.Second {
 		t.Fatalf("Cooldowns = %+v", cfg.Cooldowns)
+	}
+}
+
+func TestLoadConfigRejectsNonPositiveSweepInterval(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "supervisor.json")
+	content := `{
+  "socket_path": "/x.sock",
+  "audit_dir": "/a",
+  "state_path": "/s.json",
+  "retention": { "sweep_interval": "0s" }
+}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("LoadConfig unexpectedly succeeded")
+	}
+	if err.Error() != "retention.sweep_interval must be positive" {
+		t.Fatalf("error = %q, want %q", err.Error(), "retention.sweep_interval must be positive")
+	}
+}
+
+func TestParsePolicyRejectsNegativeLimits(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  filePolicyConfig
+		want string
+	}{
+		{
+			name: "max files",
+			raw:  filePolicyConfig{MaxFiles: -1},
+			want: "max_files must not be negative",
+		},
+		{
+			name: "min keep",
+			raw:  filePolicyConfig{MinKeep: -1},
+			want: "min_keep must not be negative",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parsePolicy(tt.raw)
+			if err == nil {
+				t.Fatal("parsePolicy unexpectedly succeeded")
+			}
+			if err.Error() != tt.want {
+				t.Fatalf("error = %q, want %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadConfigClampsDedupCacheToAuditMaxFiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "supervisor.json")
+	content := `{
+  "socket_path": "/x.sock",
+  "audit_dir": "/a",
+  "state_path": "/s.json",
+  "dedup_cache_size": 9000,
+  "retention": {
+    "audit": { "max_files": 100 }
+  }
+}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.DedupCacheSize != cfg.Retention.Audit.MaxFiles {
+		t.Fatalf("DedupCacheSize = %d, want %d (Audit.MaxFiles)", cfg.DedupCacheSize, cfg.Retention.Audit.MaxFiles)
+	}
+	if cfg.DedupCacheSize != 100 {
+		t.Fatalf("DedupCacheSize = %d, want 100", cfg.DedupCacheSize)
 	}
 }
 

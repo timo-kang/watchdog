@@ -5,27 +5,32 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"watchdog/internal/actions"
 	"watchdog/internal/adapters"
 	"watchdog/internal/health"
 	"watchdog/internal/incident"
+	"watchdog/internal/retention"
 	"watchdog/internal/rules"
 )
 
 type App struct {
-	logger       *log.Logger
-	interval     time.Duration
-	collectors   []adapters.Collector
-	evaluator    *rules.Evaluator
-	incident     *incident.Writer
-	rawLogs      RawLogLinker
-	actionSink   actions.Sink
-	observer     Observer
-	lastSnapshot *health.Snapshot
-	hostname     string
-	started      bool
+	logger         *log.Logger
+	interval       time.Duration
+	collectors     []adapters.Collector
+	evaluator      *rules.Evaluator
+	incident       *incident.Writer
+	rawLogs        RawLogLinker
+	actionSink     actions.Sink
+	observer       Observer
+	incidentDir    string
+	sweepInterval  time.Duration
+	incidentPolicy retention.Policy
+	lastSnapshot   *health.Snapshot
+	hostname       string
+	started        bool
 }
 
 type RawLogLinker interface {
@@ -48,18 +53,24 @@ func New(
 	rawLogLinker RawLogLinker,
 	actionSink actions.Sink,
 	observer Observer,
+	incidentDir string,
+	sweepInterval time.Duration,
+	incidentPolicy retention.Policy,
 ) *App {
 	hostname, _ := os.Hostname()
 	return &App{
-		logger:     logger,
-		interval:   interval,
-		collectors: collectors,
-		evaluator:  evaluator,
-		incident:   incidentWriter,
-		rawLogs:    rawLogLinker,
-		actionSink: actionSink,
-		observer:   observer,
-		hostname:   hostname,
+		logger:         logger,
+		interval:       interval,
+		collectors:     collectors,
+		evaluator:      evaluator,
+		incident:       incidentWriter,
+		rawLogs:        rawLogLinker,
+		actionSink:     actionSink,
+		observer:       observer,
+		incidentDir:    incidentDir,
+		sweepInterval:  sweepInterval,
+		incidentPolicy: incidentPolicy,
+		hostname:       hostname,
 	}
 }
 
@@ -68,6 +79,13 @@ func (a *App) Run(ctx context.Context) error {
 		return err
 	}
 	defer a.stopCollectors(context.Background())
+
+	incidentSweeper := retention.NewSweeper(a.logger, a.sweepInterval, retention.Target{
+		Dir:    a.incidentDir,
+		Match:  func(name string) bool { return strings.HasSuffix(name, ".json") },
+		Policy: a.incidentPolicy,
+	})
+	go incidentSweeper.Run(ctx)
 
 	if err := a.tick(ctx); err != nil {
 		a.logger.Printf("initial tick failed: %v", err)

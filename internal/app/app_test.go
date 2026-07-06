@@ -12,6 +12,7 @@ import (
 	"watchdog/internal/config"
 	"watchdog/internal/health"
 	"watchdog/internal/incident"
+	"watchdog/internal/retention"
 	"watchdog/internal/rules"
 )
 
@@ -36,6 +37,9 @@ func TestTickLinksRawLogsWhenIncidentIsWritten(t *testing.T) {
 		rawLogs,
 		noopSink{},
 		nil,
+		t.TempDir(),
+		time.Minute,
+		retention.Policy{},
 	)
 
 	if err := daemon.tick(context.Background()); err != nil {
