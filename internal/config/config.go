@@ -81,6 +81,7 @@ type ModuleReportSourceConfig struct {
 	SocketPath        string
 	MaxMessageBytes   int
 	DefaultStaleAfter time.Duration
+	ReportTTL         time.Duration
 }
 
 type SystemdSourceConfig struct {
@@ -206,6 +207,7 @@ type fileModuleReportSource struct {
 	SocketPath        string `json:"socket_path"`
 	MaxMessageBytes   int    `json:"max_message_bytes"`
 	DefaultStaleAfter string `json:"default_stale_after"`
+	ReportTTL         string `json:"report_ttl"`
 }
 
 type fileSystemdSource struct {
@@ -329,6 +331,7 @@ func Load(path string) (Config, error) {
 				SocketPath:        "./var/run/watchdog/module.sock",
 				MaxMessageBytes:   4096,
 				DefaultStaleAfter: "5s",
+				ReportTTL:         "15m",
 			},
 			Systemd: fileSystemdSource{
 				Enabled: false,
@@ -542,6 +545,14 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("sources.module_reports.default_stale_after must be positive")
 	}
 
+	moduleReportTTL, err := time.ParseDuration(nonEmptyOr(raw.Sources.ModuleReports.ReportTTL, "15m"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse sources.module_reports.report_ttl: %w", err)
+	}
+	if moduleReportTTL < 0 {
+		return Config{}, fmt.Errorf("sources.module_reports.report_ttl must not be negative")
+	}
+
 	if raw.Sources.ModuleReports.MaxMessageBytes <= 0 {
 		return Config{}, fmt.Errorf("sources.module_reports.max_message_bytes must be positive")
 	}
@@ -560,6 +571,7 @@ func Load(path string) (Config, error) {
 			SocketPath:        raw.Sources.ModuleReports.SocketPath,
 			MaxMessageBytes:   raw.Sources.ModuleReports.MaxMessageBytes,
 			DefaultStaleAfter: moduleStaleAfter,
+			ReportTTL:         moduleReportTTL,
 		},
 		Systemd: SystemdSourceConfig{
 			Enabled: raw.Sources.Systemd.Enabled,
@@ -723,6 +735,13 @@ func Load(path string) (Config, error) {
 		Sources:            sources,
 		Rules:              raw.Rules,
 	}, nil
+}
+
+func nonEmptyOr(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func sanitizeSourceID(value string) string {

@@ -94,6 +94,43 @@ func TestCollectorReceivesReports(t *testing.T) {
 	t.Fatal("timed out waiting for module observation")
 }
 
+func TestCollectEvictsStaleSources(t *testing.T) {
+	c := New(config.ModuleReportSourceConfig{
+		Enabled:           true,
+		SocketPath:        filepath.Join(t.TempDir(), "module.sock"),
+		MaxMessageBytes:   2048,
+		DefaultStaleAfter: time.Second,
+		ReportTTL:         50 * time.Millisecond,
+	})
+	if err := c.Start(context.Background()); err != nil {
+		t.Fatalf("start collector: %v", err)
+	}
+	defer func() {
+		if err := c.Stop(context.Background()); err != nil {
+			t.Fatalf("stop collector: %v", err)
+		}
+	}()
+
+	c.mu.Lock()
+	c.reports["fresh"] = reportState{sourceID: "fresh", receivedAt: time.Now()}
+	c.reports["stale"] = reportState{sourceID: "stale", receivedAt: time.Now().Add(-time.Second)}
+	c.mu.Unlock()
+
+	if _, err := c.Collect(context.Background()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	c.mu.RLock()
+	_, hasFresh := c.reports["fresh"]
+	_, hasStale := c.reports["stale"]
+	c.mu.RUnlock()
+	if !hasFresh {
+		t.Fatal("fresh source should be retained")
+	}
+	if hasStale {
+		t.Fatal("stale source should be evicted")
+	}
+}
+
 func TestCollectorAcceptsReportedSourceType(t *testing.T) {
 	report, err := decodeReport([]byte(`{
 		"source_id": "robot.ethercat",
