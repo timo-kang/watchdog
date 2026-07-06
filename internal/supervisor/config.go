@@ -157,6 +157,9 @@ func LoadConfig(path string) (Config, error) {
 	if dedupSize <= 0 {
 		dedupSize = 2048
 	}
+	if retentionCfg.Audit.MaxFiles > 0 && dedupSize > retentionCfg.Audit.MaxFiles {
+		dedupSize = retentionCfg.Audit.MaxFiles
+	}
 
 	return Config{
 		SocketPath:     raw.SocketPath,
@@ -212,6 +215,9 @@ func parseRetention(raw fileRetentionConfig) (RetentionConfig, error) {
 	interval, err := time.ParseDuration(nonEmpty(raw.SweepInterval, "60s"))
 	if err != nil {
 		return RetentionConfig{}, fmt.Errorf("parse retention.sweep_interval: %w", err)
+	}
+	if interval <= 0 {
+		return RetentionConfig{}, fmt.Errorf("retention.sweep_interval must be positive")
 	}
 	audit, err := parsePolicy(raw.Audit)
 	if err != nil {

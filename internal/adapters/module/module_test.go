@@ -112,7 +112,7 @@ func TestCollectEvictsStaleSources(t *testing.T) {
 	}()
 
 	c.mu.Lock()
-	c.reports["fresh"] = reportState{sourceID: "fresh", receivedAt: time.Now()}
+	c.reports["fresh"] = reportState{sourceID: "fresh", receivedAt: time.Now().Add(time.Hour)}
 	c.reports["stale"] = reportState{sourceID: "stale", receivedAt: time.Now().Add(-time.Second)}
 	c.mu.Unlock()
 

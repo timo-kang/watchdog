@@ -90,6 +90,52 @@ func TestLoadConfigParsesStateAndCooldowns(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsNonPositiveSweepInterval(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "supervisor.json")
+	content := `{
+  "socket_path": "/x.sock",
+  "audit_dir": "/a",
+  "state_path": "/s.json",
+  "retention": { "sweep_interval": "0s" }
+}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("LoadConfig unexpectedly succeeded")
+	}
+	if err.Error() != "retention.sweep_interval must be positive" {
+		t.Fatalf("error = %q, want %q", err.Error(), "retention.sweep_interval must be positive")
+	}
+}
+
+func TestLoadConfigClampsDedupCacheToAuditMaxFiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "supervisor.json")
+	content := `{
+  "socket_path": "/x.sock",
+  "audit_dir": "/a",
+  "state_path": "/s.json",
+  "dedup_cache_size": 9000,
+  "retention": {
+    "audit": { "max_files": 100 }
+  }
+}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.DedupCacheSize != cfg.Retention.Audit.MaxFiles {
+		t.Fatalf("DedupCacheSize = %d, want %d (Audit.MaxFiles)", cfg.DedupCacheSize, cfg.Retention.Audit.MaxFiles)
+	}
+	if cfg.DedupCacheSize != 100 {
+		t.Fatalf("DedupCacheSize = %d, want 100", cfg.DedupCacheSize)
+	}
+}
+
 func TestLoadConfigRejectsEnabledShadowFSMWithoutRequestDir(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "supervisor.json")
 	content := `{

@@ -155,6 +155,13 @@ so a restart reseed covers the full window. Retention and TTL are optional and
 backward compatible: any `max_files`/`max_bytes` of `0`, or `report_ttl` of `0`,
 disables that limit and reproduces the previous unbounded behavior.
 
+**Upgrade note:** after upgrading, a deployment with no `retention` block does
+*not* stay unbounded - it enforces the bounded defaults on first restart.
+Incident, audit, and shadow-request files beyond the budget are pruned
+oldest-first, and idle module report sources are evicted after `report_ttl`
+(default `15m`). To keep the old unbounded behavior, set `max_files: 0` and
+`max_bytes: 0` (and `report_ttl: 0`) explicitly.
+
 Example supervisor config:
 
 ```json

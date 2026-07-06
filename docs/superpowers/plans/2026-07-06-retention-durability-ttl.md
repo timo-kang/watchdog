@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Pure Go, no new external dependencies (only stdlib; `prometheus/client_golang` already present). Copy verbatim.
-- Backward compatible: a zero/omitted retention budget (`max_files:0`, `max_bytes:0`) or `report_ttl:0` disables that limit and reproduces today's behavior.
+- Backward compatible where opted in: an OMITTED retention block enables the documented bounded DEFAULTS on first restart (it does NOT reproduce today's behavior); only explicit `max_files:0` AND `max_bytes:0` (and `report_ttl:0`) restore today's unbounded behavior. Any individual `max_files`/`max_bytes` of `0`, or `report_ttl:0`, disables that particular limit.
 - Retention runs in a background sweeper only — never inline on the supervisor receive loop or watchdog poll loop.
 - fsync scope is forensic-only (incident snapshots, audit records, shadow-FSM request records). Mirrors (`latest.json`, `current_state.json`, shadow `latest`) use atomic-only writes. No fsync config knob.
 - All timestamped filenames are lexically chronological; retention orders by filename, not mtime.

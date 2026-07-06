@@ -4,7 +4,9 @@
 package retention
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -73,7 +75,7 @@ func Prune(dir string, match func(name string) bool, p Policy) (int, error) {
 		removed++
 	}
 	if len(errs) > 0 {
-		return removed, fmt.Errorf("prune %s: %d errors, first: %w", dir, len(errs), errs[0])
+		return removed, fmt.Errorf("prune %s: %w", dir, errors.Join(errs...))
 	}
 	return removed, nil
 }
@@ -99,6 +101,9 @@ func ParseByteSize(s string) (int64, error) {
 	}
 	if n < 0 {
 		return 0, fmt.Errorf("byte size must not be negative: %q", s)
+	}
+	if mult > 1 && n > math.MaxInt64/mult {
+		return 0, fmt.Errorf("byte size overflows int64: %q", s)
 	}
 	return n * mult, nil
 }

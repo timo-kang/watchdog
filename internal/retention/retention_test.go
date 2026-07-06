@@ -104,4 +104,7 @@ func TestParseByteSize(t *testing.T) {
 	if _, err := ParseByteSize("12Zz"); err == nil {
 		t.Fatal("ParseByteSize(\"12Zz\") should error")
 	}
+	if _, err := ParseByteSize("99999999999Gi"); err == nil {
+		t.Fatal("ParseByteSize(\"99999999999Gi\") should error (overflow)")
+	}
 }
