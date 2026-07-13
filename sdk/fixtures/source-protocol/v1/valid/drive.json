@@ -1,0 +1,1 @@
+{"source_id":"robot-1.drive.left_hip","source_type":"drive","severity":"fail","reason":"over temp","metrics":{"drive.motor_temp_c":95.0,"drive.fault_code":12}}
