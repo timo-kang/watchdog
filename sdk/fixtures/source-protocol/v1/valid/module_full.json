@@ -1,0 +1,1 @@
+{"source_id":"robot-1.main","source_type":"module","severity":"warn","reason":"deadline miss","observed_at":"2026-01-02T15:04:05Z","stale_after_ms":1500,"metrics":{"control_period_us":551},"labels":{"process":"robot_control_node"}}
