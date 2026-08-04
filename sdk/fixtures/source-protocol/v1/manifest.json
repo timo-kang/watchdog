@@ -1,0 +1,14 @@
+{
+  "protocol_version": 1,
+  "cases": [
+    {"file": "valid/module_minimal.json", "outcome": "accept"},
+    {"file": "valid/module_full.json", "outcome": "accept"},
+    {"file": "valid/drive.json", "outcome": "accept"},
+    {"file": "valid/ethercat.json", "outcome": "accept"},
+    {"file": "invalid/missing_source_id.json", "outcome": "reject", "reason": "source_id"},
+    {"file": "invalid/empty_severity.json", "outcome": "reject", "reason": "severity"},
+    {"file": "invalid/bad_severity.json", "outcome": "reject", "reason": "severity"},
+    {"file": "invalid/wrong_metric_type.json", "outcome": "reject", "reason": "decode report"},
+    {"file": "invalid/not_json.json", "outcome": "reject", "reason": "decode report"}
+  ]
+}

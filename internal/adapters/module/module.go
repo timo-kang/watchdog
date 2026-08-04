@@ -214,22 +214,39 @@ func (c *Collector) readLoop(ctx context.Context, conn *net.UnixConn) {
 	}
 }
 
-func decodeReport(data []byte, defaultStaleAfter time.Duration) (reportState, error) {
+// ValidateReport reports whether payload is a conformant v1 source report.
+// It uses the same parse/validate path the daemon uses to ingest reports, so
+// what validates here is exactly what the daemon accepts.
+func ValidateReport(payload []byte) error {
+	_, _, err := parseIncoming(payload)
+	return err
+}
+
+// parseIncoming unmarshals and validates a v1 source report. It is the single
+// source of truth for acceptance; both decodeReport and ValidateReport use it.
+func parseIncoming(payload []byte) (incomingReport, health.Severity, error) {
 	var incoming incomingReport
-	if err := json.Unmarshal(data, &incoming); err != nil {
-		return reportState{}, fmt.Errorf("decode report: %w", err)
+	if err := json.Unmarshal(payload, &incoming); err != nil {
+		return incomingReport{}, "", fmt.Errorf("decode report: %w", err)
 	}
 	if incoming.SourceID == "" {
-		return reportState{}, fmt.Errorf("source_id is required")
+		return incomingReport{}, "", fmt.Errorf("source_id is required")
+	}
+	severity, err := health.ParseSeverity(incoming.Severity)
+	if err != nil {
+		return incomingReport{}, "", err
+	}
+	return incoming, severity, nil
+}
+
+func decodeReport(data []byte, defaultStaleAfter time.Duration) (reportState, error) {
+	incoming, severity, err := parseIncoming(data)
+	if err != nil {
+		return reportState{}, err
 	}
 	sourceType := incoming.SourceType
 	if sourceType == "" {
 		sourceType = "module"
-	}
-
-	severity, err := health.ParseSeverity(incoming.Severity)
-	if err != nil {
-		return reportState{}, err
 	}
 
 	collectedAt := incoming.ObservedAt
