@@ -17,7 +17,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	var err error
 	switch len(args) {
 	case 0:
-		data, err = io.ReadAll(stdin)
+		data, err = io.ReadAll(io.LimitReader(stdin, 1024*1024))
 	case 1:
 		data, err = os.ReadFile(args[0])
 	default:
