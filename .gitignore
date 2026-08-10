@@ -6,3 +6,13 @@ var/
 /watchdog-supervisor
 /watchdogctl
 /watchdog-sim-module
+
+# Internal strategy / planning docs — kept out of the public repository.
+# The public roadmap and scope live in README.md. Rename or move these if you
+# ever intend to publish a cleaned-up version.
+/ROADMAP.md
+/docs/robot-platform-product-plan.md
+/docs/self-healing-plan.md
+/docs/ethercat-slave-monitoring-plan.md
+/docs/raw-data-logging-plan.md
+/docs/robot-node-integration-plan.md

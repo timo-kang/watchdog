@@ -541,3 +541,65 @@ What still belongs outside this repo:
 - final robot FSM and autonomy policy
 - fleet dashboards and remote command center
 - vendor-specific telemetry for every module on the robot
+
+## Project Scope & Open-Core
+
+This repository is the **open-source local watchdog stack**, licensed under
+Apache-2.0. It is designed to be fully functional standalone and offline — the
+local detection, incident capture, supervisor, and safe-stop advisory paths
+never depend on any network service or hosted component.
+
+In the open core (this repo):
+
+- on-robot health detection and the normalized health model
+- incident snapshots and optional incident-to-raw-log indexing
+- the local supervisor: action latching, cooldown, audit, and shadow-mode
+  self-healing handoff
+- host / systemd / network / power / storage / time-sync / CAN / EtherCAT
+  adapters and the module-heartbeat protocol
+- the header-only C++ integration SDK and protocol v1 fixtures
+- Prometheus/OpenMetrics endpoints, the Docker simulation stack, and packaging
+
+Commercial / not in the open core:
+
+- fleet command-center and remote multi-robot dashboards
+- cross-fleet incident aggregation and upload services
+- policy-bundle distribution across a fleet
+
+These are the "fleet & GUI visibility" layer. The design rule is that the local
+stack stays fully operational when disconnected from any such layer, so the
+open/commercial split never sits on the safety-relevant path.
+
+Distinct from the open/commercial split, some things are simply **not this
+project's job** at any tier: hard real-time actuator safety, the robot FSM /
+autonomy policy, and vendor-specific per-module telemetry.
+
+## Roadmap
+
+Public milestones for the open-source stack (commercial fleet/command-center
+work is tracked separately and is not part of this roadmap):
+
+- ✅ Baseline integration: health model, incident writer, metrics, supervisor
+  latch, C++ heartbeat SDK
+- ✅ Bounded on-device retention + power-loss-durable forensic writes + module
+  report TTL eviction
+- 🔜 Module heartbeat & action protocol **v1 freeze** and installable C++ SDK
+  packaging (plain C++, SOEM, ROS 2 examples + conformance fixtures)
+- 🔜 EtherCAT slave health with per-slave topology and `critical/important/optional`
+  criticality
+- 🔜 Self-healing supervisor policy: shadow mode → gated execution with retry
+  budget, escalation, and manual resolve
+- 🔜 Production packaging (`.deb`), systemd units, operator runbook, and a real
+  robot trial report
+- 🧭 A public **source/adapter plugin contract** so third parties can add health
+  sources without forking `internal/`
+
+Status markers: ✅ shipped · 🔜 planned · 🧭 exploring.
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). The Docker
+simulator is the supported way to develop and verify changes without robot
+hardware. One rule is absolute: the generic core never gains direct actuator,
+drive-enable, E-stop, or power control — watchdog stays advisory and the robot
+FSM keeps final safety authority.
