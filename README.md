@@ -518,6 +518,7 @@ docker compose -f deploy/docker/docker-compose.sim.yml exec watchdog-supervisor 
 - `docs/milestones.md`: project milestones
 - `docs/bus-integration.md`: CAN and EtherCAT integration handoff
 - `docs/action-interface.md`: watchdog to supervisor contract
+- `docs/source-protocol.md`: source producer protocol v1 — write a health source in any language
 - `docs/observability.md`: metrics, Prometheus, Grafana, and dashboard notes
 
 ## Current Boundaries
@@ -591,8 +592,10 @@ work is tracked separately and is not part of this roadmap):
   budget, escalation, and manual resolve
 - 🔜 Production packaging (`.deb`), systemd units, operator runbook, and a real
   robot trial report
-- 🧭 A public **source/adapter plugin contract** so third parties can add health
-  sources without forking `internal/`
+- ✅ A public **source producer contract** (protocol v1, frozen + conformance-tested,
+  with the `watchdog-report-validate` self-test tool) so third parties can add a
+  health source in any language without forking `internal/` — see
+  [`docs/source-protocol.md`](docs/source-protocol.md)
 
 Status markers: ✅ shipped · 🔜 planned · 🧭 exploring.
 

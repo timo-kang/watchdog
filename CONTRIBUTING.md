@@ -12,6 +12,12 @@ Contributions to the local detection, incident capture, supervisor, adapters,
 C++ SDK, packaging, and docs are welcome. Fleet/command-center features are out
 of scope here — please open a discussion before proposing anything in that area.
 
+To add a **new health source**, you usually do not touch this repo at all: send
+conformant reports over the module socket per the frozen
+[Source Producer Protocol v1](docs/source-protocol.md) (any language), and
+self-test them with `watchdog-report-validate`. Modify `internal/adapters/` only
+when adding a *built-in* collector to the daemon itself.
+
 Because watchdog runs next to real robots, one rule is absolute: **the generic
 core never gains direct actuator, drive-enable, E-stop, or power control.**
 Watchdog detects, records, and *requests* actions; the robot FSM keeps final

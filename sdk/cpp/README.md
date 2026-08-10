@@ -22,6 +22,13 @@ is exporting node-owned current, temperature, voltage, or fault diagnostics.
 Use `source_type: "ethercat"` with `ethercat.*` metrics only when the process is
 reporting observe-only fieldbus health through the module socket.
 
+This SDK is one implementation of the language-agnostic **Source Producer
+Protocol v1**. The normative contract (schema, acceptance rules, and
+compatibility policy) is [`docs/source-protocol.md`](../../docs/source-protocol.md);
+conformance fixtures live in `sdk/fixtures/source-protocol/v1/`, and any
+producer's output can be checked against the daemon's real validator with the
+`watchdog-report-validate` tool.
+
 ## Raw Log Segments
 
 Use `watchdog::rawlog::SegmentWriter` when a robot process should write raw
