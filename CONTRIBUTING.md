@@ -8,8 +8,8 @@ edge devices. This guide gets you productive without needing robot hardware.
 
 This repository is the **open-source local watchdog stack** (see
 [Project Scope & Open-Core](README.md#project-scope--open-core) in the README).
-Contributions to the local detection, incident capture, supervisor, adapters,
-C++ SDK, packaging, and docs are welcome. Fleet/command-center features are out
+Contributions to the local detection, incident capture, adapters, the source
+producer protocol, the C++ SDK, packaging, and docs are welcome. Fleet/command-center features are out
 of scope here — please open a discussion before proposing anything in that area.
 
 To add a **new health source**, you usually do not touch this repo at all: send
