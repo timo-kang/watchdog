@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "type": "FaultReport",
+  "cases": [
+    {"file": "valid/report_minimal.json", "outcome": "accept"},
+    {"file": "valid/report_active.json", "outcome": "accept"},
+    {"file": "valid/report_no_liveness.json", "outcome": "accept"},
+    {"file": "invalid/bad_schema_version.json", "outcome": "reject", "reason": "schema_version"},
+    {"file": "invalid/missing_source_id.json", "outcome": "reject", "reason": "source_id"},
+    {"file": "invalid/negative_deadline.json", "outcome": "reject", "reason": "deadline_ms"},
+    {"file": "invalid/bad_severity.json", "outcome": "reject", "reason": "severity"},
+    {"file": "invalid/missing_code.json", "outcome": "reject", "reason": "code"}
+  ]
+}
