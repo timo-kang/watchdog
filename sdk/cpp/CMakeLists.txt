@@ -38,6 +38,7 @@ endif()
 
 if(WATCHDOG_CPP_BUILD_TESTS)
   enable_testing()
+  find_package(Threads REQUIRED)
 
   add_executable(watchdog_reporter_test tests/reporter_test.cpp)
   target_link_libraries(watchdog_reporter_test PRIVATE watchdog::cpp)
@@ -50,6 +51,10 @@ if(WATCHDOG_CPP_BUILD_TESTS)
   add_executable(watchdog_raw_log_test tests/raw_log_test.cpp)
   target_link_libraries(watchdog_raw_log_test PRIVATE watchdog::cpp)
   add_test(NAME watchdog_raw_log_test COMMAND watchdog_raw_log_test)
+
+  add_executable(watchdog_fault_reporter_test tests/fault_reporter_test.cpp)
+  target_link_libraries(watchdog_fault_reporter_test PRIVATE watchdog::cpp Threads::Threads)
+  add_test(NAME watchdog_fault_reporter_test COMMAND watchdog_fault_reporter_test)
 endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
