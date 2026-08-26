@@ -29,6 +29,32 @@ conformance fixtures live in `sdk/fixtures/source-protocol/v1/`, and any
 producer's output can be checked against the daemon's real validator with the
 `watchdog-report-validate` tool.
 
+## Fault Diagnosis (DTC) reporting — middleware
+
+`watchdog/fault_reporter.hpp` is the source-side reporter for the fault-diagnosis (DTC)
+middleware (model: [`docs/dtc-model.md`](../../docs/dtc-model.md)). A source says "fault
+on/off" via `Set(code, severity)` / `Clear(code)`; the reporter owns the v1 `FaultReport`
+serialization, the sequence, and the liveness `deadline_ms`, and publishes over a pluggable
+transport (default: a non-blocking Unix datagram sender). It carries facts only — never a
+recovery action.
+
+```cpp
+#include "watchdog/fault_reporter.hpp"
+
+watchdog::dtc::FaultReporterOptions opts;
+opts.source_id = "robot-1.raidrive";
+opts.deadline_ms = 1000;                                // liveness window for the manager
+watchdog::dtc::FaultReporter reporter(opts);
+
+reporter.Set("C1131", watchdog::dtc::Severity::kFatal); // actuator overheat
+reporter.Publish();                                     // heartbeat + immediate on transition
+reporter.Clear("C1131");
+```
+
+`watchdog::dtc::DataFreshnessWatchdog` is a companion helper: on its own thread it invokes a
+callback if `Feed()` is not called within a deadline, turning a stalled data stream into a
+DTC — detection only; recovery stays with the source.
+
 ## Raw Log Segments
 
 Use `watchdog::rawlog::SegmentWriter` when a robot process should write raw
