@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"watchdog/internal/actions"
 	"watchdog/internal/adapters"
 	"watchdog/internal/health"
 	"watchdog/internal/incident"
@@ -23,7 +22,6 @@ type App struct {
 	evaluator      *rules.Evaluator
 	incident       *incident.Writer
 	rawLogs        RawLogLinker
-	actionSink     actions.Sink
 	observer       Observer
 	incidentDir    string
 	sweepInterval  time.Duration
@@ -41,7 +39,6 @@ type Observer interface {
 	ObserveCollectorResult(name string, duration time.Duration, err error)
 	ObserveSnapshot(snapshot health.Snapshot)
 	ObserveIncidentWrite(written bool, err error)
-	ObserveActionSink(err error)
 }
 
 func New(
@@ -51,7 +48,6 @@ func New(
 	evaluator *rules.Evaluator,
 	incidentWriter *incident.Writer,
 	rawLogLinker RawLogLinker,
-	actionSink actions.Sink,
 	observer Observer,
 	incidentDir string,
 	sweepInterval time.Duration,
@@ -65,7 +61,6 @@ func New(
 		evaluator:      evaluator,
 		incident:       incidentWriter,
 		rawLogs:        rawLogLinker,
-		actionSink:     actionSink,
 		observer:       observer,
 		incidentDir:    incidentDir,
 		sweepInterval:  sweepInterval,
@@ -189,15 +184,6 @@ func (a *App) tick(ctx context.Context) error {
 		} else if indexPath != "" {
 			a.logger.Printf("raw log index=%s incident=%s", indexPath, incidentPath)
 		}
-	}
-
-	if err := a.actionSink.HandleTransition(ctx, a.lastSnapshot, snapshot, incidentPath); err != nil {
-		if a.observer != nil {
-			a.observer.ObserveActionSink(err)
-		}
-		a.logger.Printf("action sink: %v", err)
-	} else if a.observer != nil {
-		a.observer.ObserveActionSink(nil)
 	}
 
 	a.lastSnapshot = &snapshot

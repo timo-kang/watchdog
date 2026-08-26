@@ -21,7 +21,6 @@ func TestWatchdogCollectorExportsSnapshotAndCollectorStats(t *testing.T) {
 	collector.ObserveCollectorResult("time_sync", 25*time.Millisecond, nil)
 	collector.ObserveCollectorResult("network", 10*time.Millisecond, assertErr{})
 	collector.ObserveIncidentWrite(true, nil)
-	collector.ObserveActionSink(assertErr{})
 	collector.ObserveSnapshot(health.Snapshot{
 		CollectedAt: time.Unix(1714464000, 0).UTC(),
 		Overall:     health.SeverityWarn,
