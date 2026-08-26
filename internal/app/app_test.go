@@ -35,7 +35,6 @@ func TestTickLinksRawLogsWhenIncidentIsWritten(t *testing.T) {
 		rules.New(config.RulesConfig{}),
 		incident.New(t.TempDir(), true),
 		rawLogs,
-		noopSink{},
 		nil,
 		t.TempDir(),
 		time.Minute,
@@ -76,10 +75,4 @@ func (r *recordingRawLogLinker) LinkIncident(incidentPath string, snapshot healt
 	r.incidentPath = incidentPath
 	r.snapshot = snapshot
 	return r.indexPath, nil
-}
-
-type noopSink struct{}
-
-func (noopSink) HandleTransition(_ context.Context, _ *health.Snapshot, _ health.Snapshot, _ string) error {
-	return nil
 }

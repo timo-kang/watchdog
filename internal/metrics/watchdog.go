@@ -12,10 +12,9 @@ import (
 type WatchdogCollector struct {
 	mu sync.RWMutex
 
-	snapshot             *health.Snapshot
-	collectorStats       map[string]watchdogCollectorStats
-	incidentTotals       map[string]uint64
-	actionSinkErrorTotal uint64
+	snapshot       *health.Snapshot
+	collectorStats map[string]watchdogCollectorStats
+	incidentTotals map[string]uint64
 
 	snapshotTimestampDesc  *prometheus.Desc
 	snapshotOverallDesc    *prometheus.Desc
@@ -31,7 +30,6 @@ type WatchdogCollector struct {
 	collectorErrorDesc     *prometheus.Desc
 	collectorHealthyDesc   *prometheus.Desc
 	incidentTotalsDesc     *prometheus.Desc
-	actionSinkErrorsDesc   *prometheus.Desc
 }
 
 type watchdogCollectorStats struct {
@@ -119,11 +117,6 @@ func NewWatchdogCollector() *WatchdogCollector {
 			"Total incident writer outcomes by result.",
 			[]string{"result"}, nil,
 		),
-		actionSinkErrorsDesc: prometheus.NewDesc(
-			"watchdog_action_sink_error_total",
-			"Total action sink errors observed by watchdog.",
-			nil, nil,
-		),
 	}
 }
 
@@ -174,15 +167,6 @@ func (c *WatchdogCollector) ObserveIncidentWrite(written bool, err error) {
 	}
 }
 
-func (c *WatchdogCollector) ObserveActionSink(err error) {
-	if err == nil {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.actionSinkErrorTotal++
-}
-
 func (c *WatchdogCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.snapshotTimestampDesc
 	ch <- c.snapshotOverallDesc
@@ -198,7 +182,6 @@ func (c *WatchdogCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.collectorErrorDesc
 	ch <- c.collectorHealthyDesc
 	ch <- c.incidentTotalsDesc
-	ch <- c.actionSinkErrorsDesc
 }
 
 func (c *WatchdogCollector) Collect(ch chan<- prometheus.Metric) {
@@ -258,7 +241,6 @@ func (c *WatchdogCollector) Collect(ch chan<- prometheus.Metric) {
 	for result, total := range c.incidentTotals {
 		ch <- prometheus.MustNewConstMetric(c.incidentTotalsDesc, prometheus.CounterValue, float64(total), result)
 	}
-	ch <- prometheus.MustNewConstMetric(c.actionSinkErrorsDesc, prometheus.CounterValue, float64(c.actionSinkErrorTotal))
 }
 
 func severityCode(severity health.Severity) float64 {
